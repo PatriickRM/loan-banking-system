@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://aws-0-us-west-2.pooler.supabase.com:5432/postgres
+    username: postgres.jatlgkqescporwtykpws
+    password: estudiantepatrick
+
+  application:
+    name: auth-service
+
+  config:
+    import: configserver:http://localhost:8100
