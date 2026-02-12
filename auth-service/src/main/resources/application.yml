@@ -1,11 +1,18 @@
 spring:
-  datasource:
-    url: jdbc:postgresql://aws-0-us-west-2.pooler.supabase.com:5432/postgres
-    username: postgres.jatlgkqescporwtykpws
-    password: estudiantepatrick
-
   application:
     name: auth-service
 
   config:
-    import: configserver:http://localhost:8100
+    import: optional:configserver:http://localhost:8100
+
+  cloud:
+    config:
+      enabled: true
+      fail-fast: true
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
