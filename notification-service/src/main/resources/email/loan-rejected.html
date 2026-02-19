@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+        .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+        .info-box { background: white; padding: 15px; margin: 20px 0; border-left: 4px solid #e74c3c; }
+        .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Actualización de Solicitud</h1>
+    </div>
+    <div class="content">
+        <h2>Estimado/a <span th:text="${customerName}">Cliente</span>,</h2>
+        <p>Lamentamos informarte que tu solicitud de préstamo no ha sido aprobada en esta ocasión.</p>
+
+        <div class="info-box">
+            <p><strong>Razón:</strong> <span th:text="${rejectionReason}">-</span></p>
+            <p><strong>Número de préstamo:</strong> #<span th:text="${loanId}">000</span></p>
+        </div>
+
+        <p><strong>¿Qué puedes hacer?</strong></p>
+        <ul>
+            <li>Puedes volver a aplicar en 30 días</li>
+            <li>Mejora tu historial crediticio</li>
+            <li>Considera un monto menor</li>
+            <li>Contacta con nuestro equipo para más información</li>
+        </ul>
+    </div>
+    <div class="footer">
+        <p>© 2026 Loan Banking System. Todos los derechos reservados.</p>
+    </div>
+</div>
+</body>
+</html>
