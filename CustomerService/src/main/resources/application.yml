@@ -1,27 +1,18 @@
-server:
-  port: 8082
-
 spring:
   application:
     name: CustomerService
 
+  config:
+    import: optional:configserver:http://localhost:8100
+
   cloud:
     config:
-      enabled: false
-
-  datasource:
-    url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME}
-    password: ${DATABASE_PASSWORD}
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
+      enabled: true
+      fail-fast: true
 
 eureka:
   client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
   instance:
     prefer-ip-address: true
