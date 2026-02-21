@@ -1,0 +1,28 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  config:
+    import: optional:configserver:http://localhost:8100
+
+  cloud:
+    config:
+      enabled: true
+      fail-fast: true
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+management:
+  endpoint:
+    gateway:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: "*"

@@ -3,13 +3,15 @@ package com.banking.notification.entity;
 import com.banking.notification.enums.NotificationChannel;
 import com.banking.notification.enums.NotificationStatus;
 import com.banking.notification.enums.NotificationType;
-import io.hypersistence.utils.hibernate.type.json.JsonType;
+//import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.Type;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+//import org.hibernate.annotations.Type;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -52,7 +54,7 @@ public class Notification {
     @Column(columnDefinition = "TEXT")
     private String content;
 
-    @Type(JsonType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "json")
     private Map<String, Object> metadata;
 
