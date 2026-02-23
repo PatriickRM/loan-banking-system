@@ -8,7 +8,8 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
-
+import io.jsonwebtoken.security.Keys;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.HashMap;
@@ -17,10 +18,10 @@ import java.util.function.Function;
 
 @Component
 public class JwtUtil {
-    @Value("${security.jwt.secret-key}")
+    @Value("${jwt.secret}")
     private String secret;
 
-    @Value("${security.jwt.expiration}")
+    @Value("${jwt.expiration}")
     private Long expiration;
 
     //Generar token
@@ -80,12 +81,13 @@ public class JwtUtil {
     }
     // Extraer todos los claims
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+        return Jwts.parser()
+                .verifyWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
+
     // Validar si el token ha expirado
     private Boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
