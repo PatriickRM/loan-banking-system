@@ -1,12 +1,12 @@
-package com.banking.notification.event;
+package com.banking.loan.event;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 public record LoanCreatedEvent(
         Long loanId,
         Long customerId,
         BigDecimal amount,
         Integer termMonths,
-        LocalDateTime createdAt
+        BigDecimal interestRate,
+        String purpose
 ) {}

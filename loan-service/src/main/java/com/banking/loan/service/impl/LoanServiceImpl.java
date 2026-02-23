@@ -5,6 +5,10 @@ import com.banking.loan.dto.*;
 import com.banking.loan.entity.Loan;
 import com.banking.loan.entity.LoanType;
 import com.banking.loan.enums.LoanStatus;
+import com.banking.loan.event.LoanApprovedEvent;
+import com.banking.loan.event.LoanCreatedEvent;
+import com.banking.loan.event.LoanDisbursedEvent;
+import com.banking.loan.kafka.LoanEventProducer;
 import com.banking.loan.repository.LoanRepository;
 import com.banking.loan.repository.LoanTypeRepository;
 import com.banking.loan.service.LoanService;
@@ -26,6 +30,7 @@ public class LoanServiceImpl implements LoanService {
     private final LoanRepository loanRepository;
     private final LoanTypeRepository loanTypeRepository;
     private final CustomerClient customerClient;
+    private final LoanEventProducer loanEventProducer;
 
     @Transactional
     public LoanResponse createLoan(LoanRequest request) {
@@ -62,6 +67,15 @@ public class LoanServiceImpl implements LoanService {
         calculateLoanAmounts(loan);
 
         loan = loanRepository.save(loan);
+
+        loanEventProducer.sendLoanCreated(new LoanCreatedEvent(
+                loan.getId(),
+                loan.getCustomerId(),
+                loan.getAmount(),
+                loan.getTermMonths(),
+                loan.getInterestRate(),
+                loan.getPurpose()
+        ));
 
         return mapToResponse(loan, customer);
     }
@@ -125,6 +139,14 @@ public class LoanServiceImpl implements LoanService {
         loan = loanRepository.save(loan);
 
         CustomerResponse customer = getCustomerWithFallback(loan.getCustomerId());
+
+        loanEventProducer.sendLoanApproved(new LoanApprovedEvent(
+                loan.getId(),
+                loan.getCustomerId(),
+                loan.getApprovedAmount(),
+                loan.getEvaluatedBy()
+        ));
+
         return mapToResponse(loan, customer);
     }
 
@@ -164,6 +186,15 @@ public class LoanServiceImpl implements LoanService {
         loan = loanRepository.save(loan);
 
         CustomerResponse customer = getCustomerWithFallback(loan.getCustomerId());
+
+        loanEventProducer.sendLoanDisbursed(new LoanDisbursedEvent(
+                loan.getId(),
+                loan.getCustomerId(),
+                loan.getTotalAmount(),
+                loan.getMonthlyPayment(),
+                loan.getTermMonths()
+        ));
+
         return mapToResponse(loan, customer);
     }
 
