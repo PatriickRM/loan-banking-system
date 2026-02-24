@@ -110,7 +110,7 @@ public class AuthServiceImpl implements AuthService {
                 new VerificationToken(user, token);
 
         tokenRepository.save(verificationToken);
-        //emailService.sendVerificationEmail(user, token);
+        emailService.sendVerificationEmail(user, token);
 
         return "Registro exitoso. Revisa tu email para verificar tu cuenta.";
     }
@@ -158,7 +158,7 @@ public class AuthServiceImpl implements AuthService {
                 new VerificationToken(user, token);
 
         tokenRepository.save(verificationToken);
-        //emailService.sendVerificationEmail(user, token);
+        emailService.sendVerificationEmail(user, token);
 
         return "Email de verificación reenviado.";
     }

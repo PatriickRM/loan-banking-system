@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Configuration
-@EnableWebSecurity
 @EnableReactiveMethodSecurity
 public class GatewaySecurityConfig {
 
@@ -45,7 +44,7 @@ public class GatewaySecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .pathMatchers(HttpMethod.GET,  "/api/auth/verify-email").permitAll()
-                        .pathMatchers("/actuator/health").permitAll()
+                        .pathMatchers("/actuator/**").permitAll()
 
                         // ── CLIENTE ───────────────────────────────────────────────
                         // Ver sus propios datos
