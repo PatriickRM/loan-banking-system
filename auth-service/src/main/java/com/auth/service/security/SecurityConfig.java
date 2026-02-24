@@ -49,6 +49,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/register",
                                 "/api/auth/verify",
+                                "/api/auth/resend-verification",
                                 "/oauth2/**",
                                 "/login/oauth2/**",
                                 "/actuator/health"

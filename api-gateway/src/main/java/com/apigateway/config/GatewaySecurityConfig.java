@@ -43,7 +43,8 @@ public class GatewaySecurityConfig {
                         // ── Públicos ──────────────────────────────────────────────
                         .pathMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
-                        .pathMatchers(HttpMethod.GET,  "/api/auth/verify-email").permitAll()
+                        .pathMatchers(HttpMethod.GET,  "/api/auth/verify").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/auth/resend-verification").permitAll()
                         .pathMatchers("/actuator/**").permitAll()
 
                         // ── CLIENTE ───────────────────────────────────────────────

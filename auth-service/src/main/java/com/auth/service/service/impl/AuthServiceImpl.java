@@ -99,7 +99,7 @@ public class AuthServiceImpl implements AuthService {
         user.setEnabled(false);
         user.setEmailVerified(false);
 
-        Role clientRole = roleRepository.findByName("ROLE_CLIENT")
+        Role clientRole = roleRepository.findByName("CLIENTE")
                 .orElseThrow(() -> new RuntimeException("Role no encontrado"));
 
         user.getRoles().add(clientRole);
@@ -151,14 +151,21 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("El email ya está verificado");
         }
 
-        tokenRepository.deleteByUser(user);
-
-        String token = UUID.randomUUID().toString();
         VerificationToken verificationToken =
-                new VerificationToken(user, token);
+                tokenRepository.findByUser(user)
+                        .orElse(null);
+
+        String newToken = UUID.randomUUID().toString();
+
+        if (verificationToken != null) {
+            verificationToken.setToken(newToken);
+            verificationToken.setExpiryDate(LocalDateTime.now().plusHours(24));
+        } else {
+            verificationToken = new VerificationToken(user, newToken);
+        }
 
         tokenRepository.save(verificationToken);
-        emailService.sendVerificationEmail(user, token);
+        emailService.sendVerificationEmail(user, newToken);
 
         return "Email de verificación reenviado.";
     }

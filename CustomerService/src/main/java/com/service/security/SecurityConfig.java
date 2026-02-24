@@ -30,12 +30,12 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
 
                         // CLIENTE — solo sus propios datos
-                        .requestMatchers(HttpMethod.GET, "/api/customers/me").hasRole("CLIENTE")
-                        .requestMatchers(HttpMethod.PUT, "/api/customers/me").hasRole("CLIENTE")
+                        //   .requestMatchers(HttpMethod.GET, "/api/customers/me").hasRole("CLIENTE")
+                        //   .requestMatchers(HttpMethod.PUT, "/api/customers/me").hasRole("CLIENTE")
 
                         // ANALISTA y ADMIN — todos los clientes
-                        .requestMatchers(HttpMethod.GET, "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN", "CLIENTE")
+                        .requestMatchers(HttpMethod.PUT, "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN", "CLIENTE")
 
                         // ADMIN — crear y eliminar
                         .requestMatchers(HttpMethod.POST, "/api/customers").hasRole("ADMIN")

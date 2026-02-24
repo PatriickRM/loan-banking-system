@@ -31,7 +31,7 @@ public class CustomerController {
     // ADMIN y ANALISTA ven cualquier cliente
     // CLIENTE solo puede ver su propio perfil
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'ANALISTA') or authentication.name == @customerService.getCustomerById(#id).email")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALISTA', 'CLIENTE') or authentication.name == @customerService.getCustomerById(#id).email")
     public ResponseEntity<CustomerResponse> getCustomerById(@PathVariable Long id) {
         return ResponseEntity.ok(customerService.getCustomerById(id));
     }
