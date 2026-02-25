@@ -28,22 +28,11 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
-
-                        // CLIENTE — solo sus propios datos
-                        //   .requestMatchers(HttpMethod.GET, "/api/customers/me").hasRole("CLIENTE")
-                        //   .requestMatchers(HttpMethod.PUT, "/api/customers/me").hasRole("CLIENTE")
-
-                        // ANALISTA y ADMIN — todos los clientes
-                        .requestMatchers(HttpMethod.GET, "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN", "CLIENTE")
-                        .requestMatchers(HttpMethod.PUT, "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN", "CLIENTE")
-
-                        // ADMIN — crear y eliminar
-                        .requestMatchers(HttpMethod.POST, "/api/customers").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/customers/**").hasRole("ADMIN")
-
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
+
 }

@@ -39,50 +39,39 @@ public class GatewaySecurityConfig {
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
-
-                        // ── Públicos ──────────────────────────────────────────────
+                        // 1. Rutas públicas primero
                         .pathMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .pathMatchers(HttpMethod.GET,  "/api/auth/verify").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/resend-verification").permitAll()
                         .pathMatchers("/actuator/**").permitAll()
 
-                        // ── CLIENTE ───────────────────────────────────────────────
-                        // Ver sus propios datos
+                        // 2. CLIENTE — rutas específicas ANTES de las generales
                         .pathMatchers(HttpMethod.GET,  "/api/customers/me").hasRole("CLIENTE")
                         .pathMatchers(HttpMethod.PUT,  "/api/customers/me").hasRole("CLIENTE")
-                        // Ver sus propios préstamos
+                        .pathMatchers(HttpMethod.GET,  "/api/customers/{id}")
+                        .hasAnyRole("ANALISTA", "ADMIN", "CLIENTE")
                         .pathMatchers(HttpMethod.GET,  "/api/loans/my-loans").hasRole("CLIENTE")
-                        // Solicitar un préstamo
                         .pathMatchers(HttpMethod.POST, "/api/loans").hasRole("CLIENTE")
-                        // Ver sus pagos
                         .pathMatchers(HttpMethod.GET,  "/api/payments/my-payments").hasRole("CLIENTE")
 
-                        // ── ANALISTA DE CRÉDITO ───────────────────────────────────
-                        // Ver todos los clientes
+                        // 3. ANALISTA y ADMIN
                         .pathMatchers(HttpMethod.GET,  "/api/customers/**").hasAnyRole("ANALISTA", "ADMIN")
-                        // Ver, aprobar o rechazar préstamos
-                        .pathMatchers(HttpMethod.GET,  "/api/loans/**").hasAnyRole("ANALISTA", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT,  "/api/loans/*/approve").hasAnyRole("ANALISTA", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT,  "/api/loans/*/reject").hasAnyRole("ANALISTA", "ADMIN")
-                        // Ver evaluaciones crediticias
-                        .pathMatchers(HttpMethod.GET,  "/api/credit-evaluations/**").hasAnyRole("ANALISTA", "ADMIN")
+                        .pathMatchers(HttpMethod.GET,  "/api/loans/**").hasAnyRole("ANALISTA", "ADMIN", "CLIENTE")
+                        .pathMatchers(HttpMethod.POST, "/api/loans/{id}/approve").hasAnyRole("ANALISTA", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/loans/{id}/reject").hasAnyRole("ANALISTA", "ADMIN")
 
-                        // ── AGENTE DE COBRANZA ────────────────────────────────────
+                        // 4. COBRANZA
                         .pathMatchers(HttpMethod.GET,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/payments/*/register").hasAnyRole("COBRANZA", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT,  "/api/payments/*/overdue").hasAnyRole("COBRANZA", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
+                        .pathMatchers(HttpMethod.PUT,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
 
-                        // ── ADMIN ─────────────────────────────────────────────────
-                        // Crear/editar/eliminar clientes
+                        // 5. ADMIN exclusivo
                         .pathMatchers(HttpMethod.POST,   "/api/customers").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.DELETE, "/api/customers/**").hasRole("ADMIN")
-                        // Desembolsar préstamos
-                        .pathMatchers(HttpMethod.PUT,  "/api/loans/*/disburse").hasRole("ADMIN")
-                        // Gestión de usuarios
+                        .pathMatchers(HttpMethod.POST,   "/api/loans/{id}/disburse").hasRole("ADMIN")
                         .pathMatchers("/api/auth/users/**").hasRole("ADMIN")
 
-                        // Cualquier otra ruta requiere autenticación mínima
                         .anyExchange().authenticated()
                 )
                 .addFilterAt(jwtAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)

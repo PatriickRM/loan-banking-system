@@ -22,16 +22,19 @@ public class LoanEventConsumer {
     @KafkaListener(topics = "loan-disbursed", groupId = "payment-service")
     public void handleLoanDisbursed(LoanDisbursedEvent event) {
         log.info("Received loan disbursed event: {}", event.getLoanId());
-
         try {
-            LoanResponse loan = loanClient.getLoanById(event.getLoanId());
             LocalDate startDate = event.getDisbursementDate().toLocalDate();
-
+            // Construir LoanResponse con datos del evento
+            LoanResponse loan = new LoanResponse();
+            loan.setId(event.getLoanId());
+            loan.setCustomerId(event.getCustomerId());
+            loan.setAmount(event.getTotalAmount());
+            loan.setMonthlyPayment(event.getMonthlyPayment());
+            loan.setTermMonths(event.getTermMonths());
             scheduleService.generateSchedule(loan, startDate);
-
-            log.info("Payment schedule generated for loan: {}", event.getLoanId());
+            log.info("Schedule generated for loan: {}", event.getLoanId());
         } catch (Exception e) {
-            log.error("Error processing loan disbursed event: {}", e.getMessage());
+            log.error("Error processing event: {}", e.getMessage(), e);
         }
     }
 }

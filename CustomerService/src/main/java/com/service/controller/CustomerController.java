@@ -70,7 +70,7 @@ public class CustomerController {
 
     // ADMIN, ANALISTA y el propio cliente pueden ver su historial
     @GetMapping("/{id}/credit-history")
-    @   PreAuthorize("hasAnyRole('ADMIN', 'ANALISTA') or authentication.name == @customerService.getCustomerById(#id).email")
+    @PreAuthorize("hasAnyRole('ADMIN', 'ANALISTA') or authentication.name == @customerService.getCustomerById(#id).email")
     public ResponseEntity<CreditHistoryResponse> getCreditHistory(@PathVariable Long id) {
         return ResponseEntity.ok(customerService.getCreditHistory(id));
     }

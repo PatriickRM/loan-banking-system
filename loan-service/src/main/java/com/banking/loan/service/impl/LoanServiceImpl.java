@@ -192,7 +192,8 @@ public class LoanServiceImpl implements LoanService {
                 loan.getCustomerId(),
                 loan.getTotalAmount(),
                 loan.getMonthlyPayment(),
-                loan.getTermMonths()
+                loan.getTermMonths(),
+                loan.getDisbursementDate()
         ));
 
         return mapToResponse(loan, customer);
@@ -222,11 +223,11 @@ public class LoanServiceImpl implements LoanService {
     }
 
     @CircuitBreaker(name = "customer-service", fallbackMethod = "getCustomerFallback")
-    private CustomerResponse getCustomerWithFallback(Long customerId) {
+    public CustomerResponse getCustomerWithFallback(Long customerId) {
         return customerClient.getCustomerById(customerId);
     }
 
-    private CustomerResponse getCustomerFallback(Long customerId, Exception e) {
+        public CustomerResponse getCustomerFallback(Long customerId, Exception e) {
         CustomerResponse fallback = new CustomerResponse();
         fallback.setId(customerId);
         fallback.setFirstName("N/A");

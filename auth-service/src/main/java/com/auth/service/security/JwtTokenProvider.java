@@ -21,7 +21,12 @@ public class JwtTokenProvider {
 
     public String generateToken(UserDetails userDetails) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("roles", userDetails.getAuthorities());
+        claims.put("roles",
+                userDetails.getAuthorities().stream()
+                        .map(a -> a.getAuthority().replace("ROLE_", ""))
+                        .collect(java.util.stream.Collectors.toList())
+        );
+
 
         return Jwts.builder()
                 .setClaims(claims)

@@ -58,8 +58,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             user.setEnabled(true);
             user.setEmailVerified(true);
 
-            Role clientRole = roleRepository.findByName("ROLE_CLIENT")
-                    .orElseThrow(() -> new RuntimeException("Role not found"));
+            Role clientRole = roleRepository.findByName("CLIENTE")
+                    .orElseThrow(() -> new RuntimeException("Role CLIENTE not found en BD"));
             user.getRoles().add(clientRole);
 
             return userRepository.save(user);
