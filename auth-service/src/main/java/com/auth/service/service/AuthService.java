@@ -10,4 +10,5 @@ public interface AuthService {
     String register(RegisterRequest request);
     String verifyEmail(String token);
     String resendVerificationEmail(String email);
+    void linkCustomerId(String username, Long customerId);
 }

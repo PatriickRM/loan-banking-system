@@ -12,6 +12,7 @@ import java.util.Map;
 public class CustomUserDetails implements UserDetails, OAuth2User {
 
     private final Long userId;
+    private final Long customerId;
     private final String username;
     private final String password;
     private final String email;
@@ -25,6 +26,7 @@ public class CustomUserDetails implements UserDetails, OAuth2User {
             String password,
             Collection<? extends GrantedAuthority> authorities,
             Long userId,
+            Long customerId,
             String email,
             Boolean enabled,
             Boolean emailVerified,
@@ -34,6 +36,7 @@ public class CustomUserDetails implements UserDetails, OAuth2User {
         this.password = password;
         this.authorities = authorities;
         this.userId = userId;
+        this.customerId = customerId;
         this.email = email;
         this.enabled = enabled;
         this.emailVerified = emailVerified;

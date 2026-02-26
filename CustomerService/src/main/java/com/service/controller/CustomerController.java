@@ -22,7 +22,7 @@ public class CustomerController {
 
     // Solo ADMIN puede crear clientes directamente
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENTE')")
     public ResponseEntity<CustomerResponse> createCustomer(@Valid @RequestBody CustomerRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(customerService.createCustomer(request));

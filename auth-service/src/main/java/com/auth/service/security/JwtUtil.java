@@ -35,6 +35,7 @@ public class JwtUtil {
         Map<String, Object> claims = new HashMap<>();
 
         claims.put("userId", userDetails.getUserId());
+        claims.put("customerId", userDetails.getCustomerId());
         claims.put("email", userDetails.getEmail());
         claims.put("emailVerified", userDetails.getEmailVerified());
         claims.put(

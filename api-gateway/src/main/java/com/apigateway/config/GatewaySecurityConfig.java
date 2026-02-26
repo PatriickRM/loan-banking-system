@@ -67,7 +67,7 @@ public class GatewaySecurityConfig {
                         .pathMatchers(HttpMethod.PUT,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
 
                         // 5. ADMIN exclusivo
-                        .pathMatchers(HttpMethod.POST,   "/api/customers").hasRole("ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/customers").hasAnyRole("ADMIN", "CLIENTE")
                         .pathMatchers(HttpMethod.DELETE, "/api/customers/**").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST,   "/api/loans/{id}/disburse").hasRole("ADMIN")
                         .pathMatchers("/api/auth/users/**").hasRole("ADMIN")

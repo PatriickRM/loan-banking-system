@@ -6,6 +6,8 @@ import com.auth.service.dto.response.AuthResponse;
 import com.auth.service.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -28,6 +30,14 @@ public class AuthController {
     @GetMapping("/verify")
     public ResponseEntity<String> verifyEmail(@RequestParam String token) {
         return ResponseEntity.ok(authService.verifyEmail(token));
+    }
+
+    @PutMapping("/api/auth/link-customer")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<Void> linkCustomer(@RequestParam Long customerId,
+                                             Authentication auth) {
+        authService.linkCustomerId(auth.getName(), customerId);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/resend-verification")

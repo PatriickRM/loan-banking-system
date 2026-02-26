@@ -1,9 +1,11 @@
 package com.auth.service.service.impl;
 
-
+import com.auth.service.client.CustomerClient;
+import com.auth.service.dto.request.CustomerRequest;
 import com.auth.service.dto.request.LoginRequest;
 import com.auth.service.dto.request.RegisterRequest;
 import com.auth.service.dto.response.AuthResponse;
+import com.auth.service.dto.response.CustomerResponse;
 import com.auth.service.entity.AuthProvider;
 import com.auth.service.entity.Role;
 import com.auth.service.entity.User;
@@ -16,6 +18,7 @@ import com.auth.service.service.AuthService;
 import com.auth.service.service.CustomUserDetails;
 import com.auth.service.service.EmailService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -29,6 +32,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
@@ -38,32 +42,26 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtUtil jwtUtil;
     private final EmailService emailService;
+    private final CustomerClient customerClient;   // ← nuevo
 
     @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
-
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
         if (!user.getEmailVerified()) {
             throw new RuntimeException("Email no verificado. Revisa tu bandeja de entrada.");
         }
-
         if (!user.getEnabled()) {
             throw new RuntimeException("Cuenta deshabilitada");
         }
 
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
-                        request.getUsername(),
-                        request.getPassword()
-                )
-        );
+                        request.getUsername(), request.getPassword()));
 
-        CustomUserDetails userDetails =
-                (CustomUserDetails) authentication.getPrincipal();
-
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         String token = jwtUtil.generateToken(userDetails);
 
         return new AuthResponse(
@@ -71,10 +69,7 @@ public class AuthServiceImpl implements AuthService {
                 jwtUtil.getExpirationInSeconds(),
                 user.getUsername(),
                 user.getEmail(),
-                user.getRoles()
-                        .stream()
-                        .map(Role::getName)
-                        .collect(Collectors.toList())
+                user.getRoles().stream().map(Role::getName).collect(Collectors.toList())
         );
     }
 
@@ -82,33 +77,45 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public String register(RegisterRequest request) {
 
+        // ── 1. Validar duplicados en auth ──────────────────────────────
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new RuntimeException("El username ya existe");
         }
-
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new RuntimeException("El email ya está registrado");
         }
 
+        // ── 2. Crear Customer en customer-service ──────────────────────
+        Long customerId = null;
+        try {
+            CustomerRequest customerRequest = buildCustomerRequest(request);
+            CustomerResponse customerResponse = customerClient.createCustomer(customerRequest);
+            customerId = customerResponse.getId();
+            log.info("Customer creado con id={} para email={}", customerId, request.getEmail());
+        } catch (Exception e) {
+            log.error("Error creando customer para email={}: {}", request.getEmail(), e.getMessage());
+            // Si el DNI/email ya existe en customer-service lanzamos error claro
+            throw new RuntimeException("Error al crear perfil de cliente: " + e.getMessage());
+        }
+
+        // ── 3. Crear User en auth ──────────────────────────────────────
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setCustomerId(request.getCustomerId());
+        user.setCustomerId(customerId);          // ← se asigna directamente aquí
         user.setProvider(AuthProvider.LOCAL);
         user.setEnabled(false);
         user.setEmailVerified(false);
 
         Role clientRole = roleRepository.findByName("CLIENTE")
                 .orElseThrow(() -> new RuntimeException("Role no encontrado"));
-
         user.getRoles().add(clientRole);
         userRepository.save(user);
 
+        // ── 4. Enviar email de verificación ───────────────────────────
         String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken =
-                new VerificationToken(user, token);
-
+        VerificationToken verificationToken = new VerificationToken(user, token);
         tokenRepository.save(verificationToken);
         emailService.sendVerificationEmail(user, token);
 
@@ -118,23 +125,18 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public String verifyEmail(String token) {
-
-        VerificationToken verificationToken =
-                tokenRepository.findByToken(token)
-                        .orElseThrow(() -> new RuntimeException("Token inválido"));
+        VerificationToken verificationToken = tokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Token inválido"));
 
         if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             tokenRepository.delete(verificationToken);
-            throw new RuntimeException(
-                    "Token expirado. Solicita un nuevo email de verificación."
-            );
+            throw new RuntimeException("Token expirado. Solicita un nuevo email de verificación.");
         }
 
         User user = verificationToken.getUser();
         user.setEnabled(true);
         user.setEmailVerified(true);
         userRepository.save(user);
-
         tokenRepository.delete(verificationToken);
 
         return "Email verificado exitosamente. Ya puedes iniciar sesión.";
@@ -143,7 +145,6 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public String resendVerificationEmail(String email) {
-
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
@@ -151,10 +152,7 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("El email ya está verificado");
         }
 
-        VerificationToken verificationToken =
-                tokenRepository.findByUser(user)
-                        .orElse(null);
-
+        VerificationToken verificationToken = tokenRepository.findByUser(user).orElse(null);
         String newToken = UUID.randomUUID().toString();
 
         if (verificationToken != null) {
@@ -168,5 +166,32 @@ public class AuthServiceImpl implements AuthService {
         emailService.sendVerificationEmail(user, newToken);
 
         return "Email de verificación reenviado.";
+    }
+
+    public void linkCustomerId(String username, Long customerId) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        user.setCustomerId(customerId);
+        userRepository.save(user);
+    }
+
+    // ── Helper ────────────────────────────────────────────────────────
+    private CustomerRequest buildCustomerRequest(RegisterRequest r) {
+        CustomerRequest req = new CustomerRequest();
+        req.setDni(r.getDni());
+        req.setFirstName(r.getFirstName());
+        req.setLastName(r.getLastName());
+        req.setEmail(r.getEmail());
+        req.setPhone(r.getPhone());
+        req.setDateOfBirth(r.getDateOfBirth());
+        req.setAddress(r.getAddress());
+        req.setCity(r.getCity());
+        req.setCountry(r.getCountry() != null ? r.getCountry() : "Perú");
+        req.setMonthlyIncome(r.getMonthlyIncome());
+        req.setWorkExperienceYears(r.getWorkExperienceYears() != null ? r.getWorkExperienceYears() : 0);
+        req.setOccupation(r.getOccupation());
+        req.setEmployerName(r.getEmployerName());
+        req.setDocumentType(r.getDocumentType());
+        return req;
     }
 }
