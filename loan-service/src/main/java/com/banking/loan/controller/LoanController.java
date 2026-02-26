@@ -38,7 +38,7 @@ public class LoanController {
     // ANALISTA y ADMIN ven préstamos de cualquier cliente
     // CLIENTE solo puede ver los suyos
     @GetMapping("/customer/{customerId}")
-    @PreAuthorize("hasAnyRole('ANALISTA', 'ADMIN') or authentication.name == @customerService.getCustomerById(#customerId).email")
+    @PreAuthorize("hasAnyRole('ANALISTA', 'ADMIN', 'CLIENTE')")
     public ResponseEntity<List<LoanResponse>> getLoansByCustomer(@PathVariable Long customerId) {
         return ResponseEntity.ok(loanService.getLoansByCustomer(customerId));
     }

@@ -93,4 +93,67 @@ public class NotificationEventConsumer {
     public void handleEvaluationCompleted(String message) {
         log.info("Evaluation completed event recibido (sin acción por ahora)");
     }
+
+    @KafkaListener(topics = "loan-approved", groupId = "notification-service")
+    public void handleLoanApproved(String message) {
+        try {
+            LoanApprovedEvent event = objectMapper.readValue(message, LoanApprovedEvent.class);
+            log.info("Processing loan approved event: {}", event.loanId());
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("loanId", event.loanId());
+            data.put("approvedAmount", event.approvedAmount());
+            data.put("evaluatedBy", event.evaluatedBy());
+
+            notificationService.sendNotification(
+                    event.customerId(),
+                    NotificationType.LOAN_APPROVED,
+                    data
+            );
+        } catch (Exception e) {
+            log.error("Error procesando loan-approved: {}", e.getMessage());
+        }
+    }
+
+    @KafkaListener(topics = "loan-rejected", groupId = "notification-service")
+    public void handleLoanRejected(String message) {
+        try {
+            LoanRejectedEvent event = objectMapper.readValue(message, LoanRejectedEvent.class);
+            log.info("Processing loan rejected event: {}", event.loanId());
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("loanId", event.loanId());
+            data.put("rejectionReason", event.rejectionReason());
+
+            notificationService.sendNotification(
+                    event.customerId(),
+                    NotificationType.LOAN_REJECTED,
+                    data
+            );
+        } catch (Exception e) {
+            log.error("Error procesando loan-rejected: {}", e.getMessage());
+        }
+    }
+
+    @KafkaListener(topics = "loan-disbursed", groupId = "notification-service")
+    public void handleLoanDisbursed(String message) {
+        try {
+            LoanDisbursedEvent event = objectMapper.readValue(message, LoanDisbursedEvent.class);
+            log.info("Processing loan disbursed event: {}", event.loanId());
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("loanId", event.loanId());
+            data.put("totalAmount", event.totalAmount());
+            data.put("monthlyPayment", event.monthlyPayment());
+            data.put("termMonths", event.termMonths());
+
+            notificationService.sendNotification(
+                    event.customerId(),
+                    NotificationType.LOAN_DISBURSED,
+                    data
+            );
+        } catch (Exception e) {
+            log.error("Error procesando loan-disbursed: {}", e.getMessage());
+        }
+    }
 }

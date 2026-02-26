@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 
 @Data
 public class LoanRequest {
-    @NotNull(message = "Customer ID es requerido")
     private Long customerId;
 
     @NotNull(message = "Tipo de préstamo es requerido")

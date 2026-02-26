@@ -36,7 +36,6 @@ public class NotificationService {
             notification.setChannel(NotificationChannel.EMAIL);
             notification.setStatus(NotificationStatus.PENDING);
             notification.setMetadata(data);
-            notification.setCreatedAt(LocalDateTime.now());
 
             // Preparar variables del email
             Map<String, Object> emailVariables = new HashMap<>(data);
