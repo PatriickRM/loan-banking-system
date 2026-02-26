@@ -15,4 +15,5 @@ public class LoanDisbursedEvent {
     private BigDecimal monthlyPayment;
     private Integer termMonths;
     private LocalDateTime disbursementDate;
+    private BigDecimal interestRate;
 }

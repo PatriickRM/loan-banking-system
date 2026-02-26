@@ -3,6 +3,7 @@ package com.banking.loan.kafka;
 import com.banking.loan.event.LoanApprovedEvent;
 import com.banking.loan.event.LoanCreatedEvent;
 import com.banking.loan.event.LoanDisbursedEvent;
+import com.banking.loan.event.LoanRejectedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -28,5 +29,10 @@ public class LoanEventProducer {
     public void sendLoanDisbursed(LoanDisbursedEvent event) {
         kafkaTemplate.send("loan-disbursed", String.valueOf(event.loanId()), event);
         log.info("Evento LoanDisbursed enviado para loanId={}", event.loanId());
+    }
+
+    public void sendLoanRejected(LoanRejectedEvent event) {
+        kafkaTemplate.send("loan-rejected", String.valueOf(event.loanId()), event);
+        log.info("Evento LoanRejected enviado para loanId={}", event.loanId());
     }
 }

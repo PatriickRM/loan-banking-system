@@ -31,6 +31,7 @@ public class LoanEventConsumer {
             loan.setAmount(event.getTotalAmount());
             loan.setMonthlyPayment(event.getMonthlyPayment());
             loan.setTermMonths(event.getTermMonths());
+            loan.setInterestRate(event.getInterestRate());
             scheduleService.generateSchedule(loan, startDate);
             log.info("Schedule generated for loan: {}", event.getLoanId());
         } catch (Exception e) {

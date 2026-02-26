@@ -8,6 +8,7 @@ import com.banking.loan.enums.LoanStatus;
 import com.banking.loan.event.LoanApprovedEvent;
 import com.banking.loan.event.LoanCreatedEvent;
 import com.banking.loan.event.LoanDisbursedEvent;
+import com.banking.loan.event.LoanRejectedEvent;
 import com.banking.loan.kafka.LoanEventProducer;
 import com.banking.loan.repository.LoanRepository;
 import com.banking.loan.repository.LoanTypeRepository;
@@ -167,6 +168,13 @@ public class LoanServiceImpl implements LoanService {
         loan = loanRepository.save(loan);
 
         CustomerResponse customer = getCustomerWithFallback(loan.getCustomerId());
+
+        loanEventProducer.sendLoanRejected(new LoanRejectedEvent(
+                loan.getId(),
+                loan.getCustomerId(),
+                loan.getRejectionReason()
+        ));
+
         return mapToResponse(loan, customer);
     }
 
@@ -193,7 +201,8 @@ public class LoanServiceImpl implements LoanService {
                 loan.getTotalAmount(),
                 loan.getMonthlyPayment(),
                 loan.getTermMonths(),
-                loan.getDisbursementDate()
+                loan.getDisbursementDate(),
+                loan.getInterestRate()
         ));
 
         return mapToResponse(loan, customer);

@@ -6,6 +6,8 @@ import com.service.dto.response.CustomerResponse;
 import com.service.entity.CreditHistory;
 import com.service.entity.Customer;
 import com.service.entity.CustomerDocument;
+import com.service.event.CustomerCreatedEvent;
+import com.service.event.CustomerEventProducer;
 import com.service.repository.CreditHistoryRepository;
 import com.service.repository.CustomerDocumentRepository;
 import com.service.repository.CustomerRepository;
@@ -24,7 +26,7 @@ public class CustomerService {
     private final CustomerRepository customerRepository;
     private final CreditHistoryRepository creditHistoryRepository;
     private final CustomerDocumentRepository customerDocumentRepository;
-
+    private final CustomerEventProducer customerEventProducer;
 
     @Transactional
     public CustomerResponse createCustomer(CustomerRequest request) {
@@ -52,9 +54,11 @@ public class CustomerService {
         document.setDocumentType(request.getDocumentType());
         document.setDocumentUrl("PENDIENTE"); //
         document.setVerified(false);
-
         customerDocumentRepository.save(document);
 
+        customerEventProducer.sendCustomerCreated(
+                new CustomerCreatedEvent(customer.getId(), customer.getEmail())
+        );
 
         return mapToResponse(customer);
     }

@@ -1,5 +1,7 @@
 package com.banking.payment.scheduler;
 
+import com.banking.payment.client.LoanClient;
+import com.banking.payment.dto.LoanResponse;
 import com.banking.payment.dto.PaymentScheduleResponse;
 import com.banking.payment.event.PaymentOverdueEvent;
 import com.banking.payment.service.PaymentScheduleService;
@@ -20,21 +22,22 @@ public class PaymentScheduledTasks {
 
     private final PaymentScheduleService scheduleService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final LoanClient loanClient;
 
     // Ejecutar diariamente a las 8 AM
     @Scheduled(cron = "0 0 8 * * ?")
     public void checkOverduePayments() {
-        log.info("Checking for overdue payments...");
-
         List<PaymentScheduleResponse> overduePayments = scheduleService.getOverduePayments();
 
         for (PaymentScheduleResponse schedule : overduePayments) {
             long daysOverdue = ChronoUnit.DAYS.between(schedule.getDueDate(), LocalDate.now());
 
+            LoanResponse loan = loanClient.getLoanById(schedule.getLoanId()); // ← agregar
+
             PaymentOverdueEvent event = new PaymentOverdueEvent(
                     schedule.getId(),
                     schedule.getLoanId(),
-                    null, // Customer ID (obtener del loan service)
+                    loan.getCustomerId(), // ← usar el customerId real
                     schedule.getInstallmentNumber(),
                     schedule.getAmount(),
                     schedule.getDueDate(),
@@ -42,9 +45,6 @@ public class PaymentScheduledTasks {
             );
 
             kafkaTemplate.send("payment-overdue", event);
-            log.info("Published overdue payment event for schedule: {}", schedule.getId());
         }
-
-        log.info("Found {} overdue payments", overduePayments.size());
     }
 }

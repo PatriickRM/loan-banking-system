@@ -9,5 +9,6 @@ public record LoanDisbursedEvent(
         BigDecimal totalAmount,
         BigDecimal monthlyPayment,
         Integer termMonths,
-        LocalDateTime disbursementDate
+        LocalDateTime disbursementDate,
+        BigDecimal interestRate
 ) {}

@@ -75,6 +75,7 @@ public class NotificationService {
             case LOAN_APPLICATION_RECEIVED -> "loan-application";
             case LOAN_APPROVED -> "loan-approved";
             case LOAN_REJECTED -> "loan-rejected";
+            case LOAN_DISBURSED -> "loan-disbursed";
             case PAYMENT_RECEIVED -> "payment-received";
             case PAYMENT_REMINDER -> "payment-reminder";
             case PAYMENT_OVERDUE -> "payment-overdue";
@@ -87,6 +88,7 @@ public class NotificationService {
             case LOAN_APPLICATION_RECEIVED -> "Solicitud de préstamo recibida";
             case LOAN_APPROVED -> "¡Tu préstamo ha sido aprobado!";
             case LOAN_REJECTED -> "Actualización de tu solicitud de préstamo";
+            case LOAN_DISBURSED -> "¡Tu préstamo ha sido desembolsado!";
             case PAYMENT_RECEIVED -> "Pago recibido correctamente";
             case PAYMENT_REMINDER -> "Recordatorio: Próximo pago";
             case PAYMENT_OVERDUE -> "Pago vencido - Acción requerida";

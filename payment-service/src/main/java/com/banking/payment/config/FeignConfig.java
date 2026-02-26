@@ -1,27 +1,20 @@
 package com.banking.payment.config;
 
 import feign.RequestInterceptor;
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Configuration
 public class FeignConfig {
+
+    @Value("${service.internal-token}")
+    private String internalToken;
+
     @Bean
     public RequestInterceptor requestInterceptor() {
         return requestTemplate -> {
-            ServletRequestAttributes attrs =
-                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attrs != null) {
-                HttpServletRequest request = attrs.getRequest();
-                String authHeader = request.getHeader("Authorization");
-                if (authHeader != null) {
-                    requestTemplate.header("Authorization", authHeader);
-                }
-            }
+            requestTemplate.header("Authorization", "Bearer " + internalToken);
         };
     }
 }
-
