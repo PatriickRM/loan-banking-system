@@ -1,56 +1,78 @@
-import { Component, inject } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
+import { Component, inject, signal, OnInit } from '@angular/core';
+import { DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
 import { SidebarComponent, NavItem } from '../../../shared/components/sidebar.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { LoanService } from '../../../core/services/loan.service';
+import { NotificationService } from '../../../core/services/notification.service';
+import { LoanResponse, LoanStatus } from '../../../core/models/loan.models';
+import { LoanRequestComponent } from '../../../features/loan/loan-request.component';
+import { LoanDetailComponent } from '../../../features/loan/loan-detail.component';
+import { NotificationPanelComponent } from '../../../features/notification/notification-panel.component';
 
 @Component({
   selector: 'app-cliente-dashboard',
-  imports: [SidebarComponent, DecimalPipe],
+  imports: [
+    SidebarComponent,
+    DecimalPipe,
+    DatePipe,
+    SlicePipe,
+    LoanRequestComponent,
+    LoanDetailComponent,
+    NotificationPanelComponent,
+  ],
   template: `
     <div class="dashboard-layout">
       <app-sidebar [navItems]="navItems" roleLabel="CLIENTE" />
 
       <main class="dashboard-content">
 
-        <!-- Greeting header -->
-        <div class="welcome-header anim-fade-up">
-          <div class="welcome-text">
+        <!-- Top bar with notification bell -->
+        <div class="top-bar anim-fade-up">
+          <div>
             <div class="page-eyebrow mono">MI CUENTA</div>
             <h1 class="page-title">
               Hola, <span class="accent-name">{{ auth.user()?.username }}</span>
             </h1>
-            <p class="text-secondary" style="margin-top:6px;">
-              Aquí podés ver y gestionar tus préstamos.
-            </p>
           </div>
-          <button class="btn btn-primary new-loan-btn">
-            + Solicitar préstamo
-          </button>
+          <div class="top-actions">
+            <!-- Notification bell -->
+            <button
+              class="bell-btn"
+              (click)="showNotifs.set(!showNotifs())"
+              [class.active]="showNotifs()"
+            >
+              <span class="bell-icon">🔔</span>
+              @if (notifService.unreadCount() > 0) {
+                <span class="bell-badge mono">{{ notifService.unreadCount() }}</span>
+              }
+            </button>
+            <button class="btn btn-primary" (click)="showLoanRequest.set(true)">
+              + Solicitar préstamo
+            </button>
+          </div>
         </div>
 
-        <!-- Credit score card -->
-        <div class="credit-banner anim-fade-up" style="animation-delay:80ms">
+        <!-- Credit score banner -->
+        <div class="credit-banner anim-fade-up" style="animation-delay:60ms">
           <div class="credit-info">
             <div class="credit-label mono">SCORE CREDITICIO</div>
-            <div class="credit-score mono">648</div>
-            <div class="credit-desc">Bueno — Podés acceder a préstamos de hasta S/ 30,000</div>
+            <div class="credit-score mono">{{ creditScore() }}</div>
+            <div class="credit-desc">{{ creditLabel() }}</div>
           </div>
           <div class="credit-meter">
             <div class="meter-track">
-              <div class="meter-fill" style="width:54%"></div>
-              <div class="meter-thumb" style="left:54%"></div>
+              <div class="meter-fill" [style.width.%]="creditPct()"></div>
+              <div class="meter-thumb" [style.left.%]="creditPct()"></div>
             </div>
             <div class="meter-labels mono">
-              <span>300</span>
-              <span>600</span>
-              <span>850</span>
+              <span>300</span><span>600</span><span>850</span>
             </div>
           </div>
         </div>
 
         <!-- Stats row -->
-        <div class="stats-row anim-fade-up" style="animation-delay:120ms">
-          @for (stat of stats; track stat.label) {
+        <div class="stats-row anim-fade-up" style="animation-delay:100ms">
+          @for (stat of computedStats(); track stat.label) {
             <div class="client-stat">
               <div class="cs-icon">{{ stat.icon }}</div>
               <div>
@@ -62,94 +84,99 @@ import { AuthService } from '../../../core/services/auth.service';
         </div>
 
         <!-- Active loans -->
-        <div class="card anim-fade-up" style="animation-delay:160ms">
+        <div class="card anim-fade-up" style="animation-delay:140ms">
           <div class="card-header">
             <h3 class="section-title">Mis préstamos</h3>
-            <span class="badge badge-cliente">ACTIVOS</span>
+            <div class="header-right">
+              @if (loadingLoans()) {
+                <div class="spinner-sm"></div>
+              }
+              <span class="badge badge-cliente">{{ loans().length }} total</span>
+            </div>
           </div>
 
-          @if (activeLoans.length === 0) {
+          @if (loans().length === 0 && !loadingLoans()) {
             <div class="empty-state">
               <div class="empty-icon">◎</div>
-              <p>No tenés préstamos activos.</p>
-              <button class="btn btn-primary" style="margin-top:12px;">
+              <p class="text-muted">No tenés préstamos aún</p>
+              <button class="btn btn-primary" style="margin-top:14px;" (click)="showLoanRequest.set(true)">
                 Solicitar mi primer préstamo
               </button>
             </div>
           } @else {
             <div class="loans-list">
-              @for (loan of activeLoans; track loan.id) {
-                <div class="loan-card">
-                  <div class="loan-top">
-                    <div>
-                      <div class="loan-id mono">#{{ loan.id }}</div>
-                      <div class="loan-amount mono">S/ {{ loan.amount | number }}</div>
+              @for (loan of loans(); track loan.id) {
+                <div class="loan-card" (click)="openDetail(loan)">
+
+                  <div class="loan-left">
+                    <div class="loan-id mono">#{{ loan.id }}</div>
+                    <div class="loan-type">{{ loan.loanTypeName }}</div>
+                    <div class="loan-amount mono">S/ {{ loan.amount | number:'1.0-0' }}</div>
+                  </div>
+
+                  <div class="loan-center">
+                    @if (isActive(loan.status)) {
+                      <div class="progress-wrap">
+                        <div class="progress-track">
+                          <div class="progress-bar" [style.width.%]="paidPct(loan)"></div>
+                        </div>
+                        <div class="progress-text mono">{{ paidPct(loan) }}% pagado</div>
+                      </div>
+                    } @else {
+                      <div class="loan-purpose text-muted">{{ loan.purpose | slice:0:50 }}{{ loan.purpose.length > 50 ? '...' : '' }}</div>
+                    }
+                    <div class="loan-date mono text-muted">
+                      {{ loan.applicationDate | date:'dd MMM yyyy' }}
                     </div>
-                    <span class="status-chip" [class]="'chip-' + loan.status.toLowerCase()">
-                      {{ loan.statusLabel }}
+                  </div>
+
+                  <div class="loan-right">
+                    @if (loan.monthlyPayment) {
+                      <div class="loan-installment">
+                        <div class="inst-label mono">/ mes</div>
+                        <div class="inst-amount mono">S/ {{ loan.monthlyPayment | number:'1.0-0' }}</div>
+                      </div>
+                    }
+                    <span class="loan-status-chip" [class]="statusClass(loan.status)">
+                      {{ statusLabel(loan.status) }}
                     </span>
+                    <div class="detail-arrow">→</div>
                   </div>
 
-                  <div class="loan-progress-wrap">
-                    <div class="loan-progress-track">
-                      <div class="loan-progress-bar" [style.width.%]="loan.paidPct"></div>
-                    </div>
-                    <div class="loan-progress-label mono">
-                      {{ loan.paidInstallments }}/{{ loan.totalInstallments }} cuotas
-                      <span class="text-muted">({{ loan.paidPct }}%)</span>
-                    </div>
-                  </div>
-
-                  <div class="loan-meta mono">
-                    <span>Próx. cuota: <strong>{{ loan.nextDue }}</strong></span>
-                    <span>Monto cuota: <strong>S/ {{ loan.installmentAmount | number }}</strong></span>
-                    <span>Saldo: <strong>S/ {{ loan.balance | number }}</strong></span>
-                  </div>
                 </div>
               }
             </div>
           }
         </div>
 
-        <!-- Payment history -->
-        <div class="card anim-fade-up" style="animation-delay:220ms">
-          <div class="card-header">
-            <h3 class="section-title">Historial de pagos</h3>
-            <span class="mono text-muted" style="font-size:11px;">Últimos 5</span>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Préstamo</th>
-                <th>Monto</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (pay of paymentHistory; track pay.id) {
-                <tr>
-                  <td class="mono" style="font-size:12px;">{{ pay.date }}</td>
-                  <td class="mono text-muted" style="font-size:12px;">#{{ pay.loanId }}</td>
-                  <td class="mono" style="color:var(--text-primary)">S/ {{ pay.amount | number }}</td>
-                  <td>
-                    <span class="status-chip chip-pagado">{{ pay.status }}</span>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
-
       </main>
     </div>
+
+    <!-- Modals -->
+    @if (showLoanRequest()) {
+      <app-loan-request
+        (closed)="showLoanRequest.set(false)"
+        (loanCreated)="onLoanCreated()"
+      />
+    }
+
+    @if (selectedLoan()) {
+      <app-loan-detail
+        [loan]="selectedLoan()!"
+        (onClose)="selectedLoan.set(null)"
+      />
+    }
+
+    @if (showNotifs()) {
+      <app-notification-panel (closed)="showNotifs.set(false)" />
+    }
   `,
   styles: [`
-    .welcome-header {
+    .top-bar {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
 
     .page-eyebrow {
@@ -161,18 +188,56 @@ import { AuthService } from '../../../core/services/auth.service';
     }
 
     .page-title { font-size: 26px; font-weight: 800; }
-
     .accent-name { color: var(--accent-bright); }
 
-    .new-loan-btn { margin-top: 6px; }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    /* Bell */
+    .bell-btn {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: all var(--t-fast);
+    }
+
+    .bell-btn:hover, .bell-btn.active {
+      background: var(--bg-hover);
+      border-color: var(--accent);
+    }
+
+    .bell-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 100px;
+      min-width: 18px;
+      text-align: center;
+    }
 
     /* Credit banner */
     .credit-banner {
       background: var(--bg-card);
       border: 1px solid var(--border-dim);
       border-radius: var(--radius-xl);
-      padding: 24px 28px;
-      margin-bottom: 20px;
+      padding: 22px 26px;
+      margin-bottom: 18px;
       display: flex;
       align-items: center;
       gap: 40px;
@@ -185,22 +250,19 @@ import { AuthService } from '../../../core/services/auth.service';
       text-transform: uppercase;
       letter-spacing: 0.12em;
       color: var(--text-muted);
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     .credit-score {
-      font-size: 52px;
+      font-size: 48px;
       font-weight: 400;
       color: var(--success);
       line-height: 1;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       letter-spacing: -0.03em;
     }
 
-    .credit-desc {
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
+    .credit-desc { font-size: 12px; color: var(--text-secondary); }
 
     .credit-meter { flex: 1; }
 
@@ -217,7 +279,6 @@ import { AuthService } from '../../../core/services/auth.service';
       height: 100%;
       background: linear-gradient(90deg, var(--danger), var(--warning), var(--success));
       border-radius: 4px;
-      position: relative;
     }
 
     .meter-thumb {
@@ -239,175 +300,250 @@ import { AuthService } from '../../../core/services/auth.service';
       color: var(--text-muted);
     }
 
-    /* Stats row */
+    /* Stats */
     .stats-row {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 24px;
+      gap: 12px;
+      margin-bottom: 20px;
     }
 
     .client-stat {
       background: var(--bg-card);
       border: 1px solid var(--border-dim);
       border-radius: var(--radius-xl);
-      padding: 18px;
+      padding: 16px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       transition: all var(--t-fast);
     }
 
-    .client-stat:hover {
-      border-color: var(--border-subtle);
-      background: var(--bg-hover);
-    }
+    .client-stat:hover { border-color: var(--border-subtle); }
 
-    .cs-icon { font-size: 22px; }
-    .cs-value { font-size: 22px; color: var(--text-primary); }
-    .cs-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .cs-icon { font-size: 20px; }
+    .cs-value { font-family: var(--font-mono); font-size: 20px; color: var(--text-primary); }
+    .cs-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
-    /* Loans */
-    .loans-list { display: flex; flex-direction: column; gap: 14px; }
+    /* Loans list */
+    .loans-list { display: flex; flex-direction: column; gap: 2px; }
 
     .loan-card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-dim);
-      border-radius: var(--radius-lg);
-      padding: 18px 20px;
+      display: grid;
+      grid-template-columns: 130px 1fr auto;
+      align-items: center;
+      gap: 20px;
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
       transition: all var(--t-fast);
     }
 
     .loan-card:hover {
-      border-color: var(--border-subtle);
+      background: var(--bg-elevated);
+      border-color: var(--border-dim);
     }
 
-    .loan-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 14px;
-    }
+    .loan-id    { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .loan-type  { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+    .loan-amount { font-family: var(--font-mono); font-size: 18px; color: var(--text-primary); }
 
-    .loan-id    { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
-    .loan-amount { font-family: var(--font-mono); font-size: 22px; color: var(--text-primary); margin-top: 4px; }
+    .progress-wrap { margin-bottom: 6px; }
 
-    .status-chip {
-      padding: 3px 10px;
-      border-radius: 100px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.06em;
-    }
-
-    .chip-activo   { background: var(--success-dim); color: var(--success); }
-    .chip-pendiente { background: var(--warning-dim); color: var(--warning); }
-    .chip-mora     { background: var(--danger-dim);  color: var(--danger);  }
-    .chip-pagado   { background: var(--accent-dim);  color: var(--accent-bright); }
-
-    .loan-progress-wrap { margin-bottom: 14px; }
-
-    .loan-progress-track {
+    .progress-track {
       height: 4px;
       background: var(--bg-card);
       border-radius: 2px;
       overflow: hidden;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
-    .loan-progress-bar {
+    .progress-bar {
       height: 100%;
       background: var(--accent);
       border-radius: 2px;
       transition: width 0.6s ease;
     }
 
-    .loan-progress-label {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
+    .progress-text { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
 
-    .loan-meta {
+    .loan-purpose { font-size: 12px; margin-bottom: 4px; }
+    .loan-date    { font-size: 11px; }
+
+    .loan-right {
       display: flex;
-      gap: 24px;
-      font-size: 12px;
-      color: var(--text-muted);
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
     }
 
-    .loan-meta strong { color: var(--text-secondary); }
+    .loan-installment { text-align: right; }
+    .inst-label  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; }
+    .inst-amount { font-size: 16px; color: var(--text-primary); }
 
+    .loan-status-chip {
+      padding: 3px 10px;
+      border-radius: 100px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+
+    .chip-pending   { background: var(--warning-dim); color: var(--warning); }
+    .chip-approved  { background: var(--success-dim); color: var(--success); }
+    .chip-active    { background: var(--accent-dim);  color: var(--accent-bright); }
+    .chip-rejected  { background: var(--danger-dim);  color: var(--danger); }
+    .chip-completed { background: rgba(148,163,184,0.1); color: #94a3b8; }
+    .chip-defaulted { background: var(--danger-dim);  color: var(--danger); }
+    .chip-cancelled { background: var(--border-dim);  color: var(--text-muted); }
+
+    .detail-arrow { color: var(--text-muted); font-size: 14px; }
+
+    /* Section title */
     .section-title { font-size: 14px; font-weight: 600; }
 
-    /* Empty state */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Empty */
     .empty-state {
       text-align: center;
-      padding: 40px 20px;
+      padding: 48px 20px;
       color: var(--text-muted);
     }
 
-    .empty-icon {
-      font-size: 36px;
-      margin-bottom: 12px;
-      opacity: 0.4;
+    .empty-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.3; }
+
+    .spinner-sm {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--border-subtle);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
     }
 
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     @media (max-width: 1100px) {
-      .credit-banner { flex-direction: column; gap: 20px; }
+      .credit-banner { flex-direction: column; gap: 16px; }
       .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .loan-meta { flex-direction: column; gap: 6px; }
+      .loan-card { grid-template-columns: 1fr auto; }
+      .loan-center { display: none; }
     }
   `],
 })
-export class ClienteDashboardComponent {
+export class ClienteDashboardComponent implements OnInit {
   readonly auth = inject(AuthService);
+  readonly loanService = inject(LoanService);
+  readonly notifService = inject(NotificationService);
+
+  readonly loans = signal<LoanResponse[]>([]);
+  readonly loadingLoans = signal(false);
+  readonly showLoanRequest = signal(false);
+  readonly showNotifs = signal(false);
+  readonly selectedLoan = signal<LoanResponse | null>(null);
 
   readonly navItems: NavItem[] = [
-    { icon: '◈', label: 'Mi cuenta',      route: '/dashboard/cliente' },
-    { icon: '◎', label: 'Mis préstamos',  route: '/dashboard/cliente' },
-    { icon: '◇', label: 'Pagos',          route: '/dashboard/cliente' },
-    { icon: '○', label: 'Documentos',     route: '/dashboard/cliente' },
-    { icon: '◦', label: 'Perfil',         route: '/dashboard/cliente' },
+    { icon: '◈', label: 'Mi cuenta',     route: '/dashboard/cliente' },
+    { icon: '◎', label: 'Mis préstamos', route: '/dashboard/cliente' },
+    { icon: '◇', label: 'Pagos',         route: '/dashboard/cliente' },
+    { icon: '○', label: 'Documentos',    route: '/dashboard/cliente' },
+    { icon: '◦', label: 'Perfil',        route: '/dashboard/cliente' },
   ];
 
-  readonly stats = [
-    { icon: '📋', label: 'Préstamos activos', value: '2' },
-    { icon: '💳', label: 'Deuda total',        value: 'S/18,400' },
-    { icon: '📅', label: 'Próx. vencimiento',  value: '05 Mar' },
-    { icon: '✓',  label: 'Cuotas al día',      value: '14' },
-  ];
+  ngOnInit(): void {
+    const user = this.auth.user();
+    if (!user?.customerId) return;
 
-  readonly activeLoans = [
-    {
-      id: '1042',
-      amount: 15000,
-      status: 'activo',
-      statusLabel: 'AL DÍA',
-      paidInstallments: 8,
-      totalInstallments: 24,
-      paidPct: 33,
-      nextDue: '05 Mar 2026',
-      installmentAmount: 720,
-      balance: 10080,
-    },
-    {
-      id: '1035',
-      amount: 5000,
-      status: 'activo',
-      statusLabel: 'AL DÍA',
-      paidInstallments: 9,
-      totalInstallments: 12,
-      paidPct: 75,
-      nextDue: '10 Mar 2026',
-      installmentAmount: 455,
-      balance: 1365,
-    },
-  ];
+    this.loadingLoans.set(true);
+    this.loanService.getLoansByCustomer(user.customerId).subscribe({
+      next: (loans) => {
+        this.loans.set(loans);
+        this.loadingLoans.set(false);
+      },
+      error: () => this.loadingLoans.set(false),
+    });
 
-  readonly paymentHistory = [
-    { id: 1, loanId: '1042', date: '05 Feb 2026', amount: 720,  status: 'Pagado' },
-    { id: 2, loanId: '1035', date: '10 Feb 2026', amount: 455,  status: 'Pagado' },
-    { id: 3, loanId: '1042', date: '05 Ene 2026', amount: 720,  status: 'Pagado' },
-    { id: 4, loanId: '1035', date: '10 Ene 2026', amount: 455,  status: 'Pagado' },
-    { id: 5, loanId: '1042', date: '05 Dic 2025', amount: 720,  status: 'Pagado' },
-  ];
+    // Load notifications count
+    this.notifService.getNotificationsByUser(user.customerId).subscribe();
+  }
+
+  onLoanCreated(): void {
+    this.showLoanRequest.set(false);
+    const user = this.auth.user();
+    if (!user?.customerId) return;
+    this.loanService.getLoansByCustomer(user.customerId).subscribe({
+      next: (loans) => this.loans.set(loans),
+    });
+  }
+
+  openDetail(loan: LoanResponse): void {
+    this.selectedLoan.set(loan);
+  }
+
+  // ── Derived computed values ─────────────────────────────────────────────
+
+  creditScore() {
+    const active = this.loans().filter((l) => isActive(l.status));
+    if (active.length === 0) return 650;
+    const hasDefault = this.loans().some((l) => l.status === 'DEFAULTED');
+    return hasDefault ? 450 : 720;
+  }
+
+  creditPct() {
+    return ((this.creditScore() - 300) / 550) * 100;
+  }
+
+  creditLabel() {
+    const score = this.creditScore();
+    if (score >= 750) return 'Excelente — Acceso a las mejores tasas';
+    if (score >= 650) return 'Bueno — Podés acceder a préstamos de hasta S/ 50,000';
+    if (score >= 550) return 'Regular — Acceso limitado a créditos';
+    return 'Bajo — Se requiere mejorar el historial crediticio';
+  }
+
+  computedStats() {
+    const loans = this.loans();
+    const active = loans.filter((l) => isActive(l.status));
+    const debt = active.reduce((acc, l) => acc + (l.outstandingBalance ?? 0), 0);
+    const monthly = active.reduce((acc, l) => acc + (l.monthlyPayment ?? 0), 0);
+
+    return [
+      { icon: '📋', label: 'Préstamos activos', value: String(active.length) },
+      { icon: '💳', label: 'Deuda total', value: debt > 0 ? `S/${(debt / 1000).toFixed(0)}K` : 'S/0' },
+      { icon: '📅', label: 'Cuota mensual', value: monthly > 0 ? `S/${monthly.toFixed(0)}` : 'S/0' },
+      { icon: '✓', label: 'Historial', value: `${loans.filter((l) => l.status === 'COMPLETED').length} completados` },
+    ];
+  }
+
+  isActive(status: LoanStatus): boolean {
+    return isActive(status);
+  }
+
+  paidPct(loan: LoanResponse): number {
+    if (!loan.totalAmount || !loan.outstandingBalance) return 0;
+    return Math.round(((loan.totalAmount - loan.outstandingBalance) / loan.totalAmount) * 100);
+  }
+
+  statusLabel(status: LoanStatus): string {
+    const labels: Record<LoanStatus, string> = {
+      PENDING: 'EVALUANDO', APPROVED: 'APROBADO', REJECTED: 'RECHAZADO',
+      ACTIVE: 'ACTIVO', COMPLETED: 'COMPLETADO', DEFAULTED: 'EN MORA', CANCELLED: 'CANCELADO',
+    };
+    return labels[status] ?? status;
+  }
+
+  statusClass(status: LoanStatus): string {
+    return `loan-status-chip chip-${status.toLowerCase()}`;
+  }
+}
+
+function isActive(status: LoanStatus): boolean {
+  return status === 'ACTIVE';
 }

@@ -21,7 +21,6 @@ export class AuthService {
 
   private readonly baseUrl = `${environment.apiUrl}/api/auth`;
 
-  // ── Reactive state via Signals (Angular 16+, idiomatic in Angular 20) ──
   private readonly _token = signal<string | null>(this.loadStoredToken());
   private readonly _user = signal<AuthUser | null>(this.loadStoredUser());
 
@@ -83,6 +82,32 @@ export class AuthService {
     this.clearAuth();
     this.router.navigate(['/auth/login']);
   }
+  
+  handleOAuthToken(token: string): void {
+  try {
+    const decoded = this.decodeToken(token);
+
+    const roles = (decoded.roles ?? []).map((r: string) =>
+      r.startsWith('ROLE_') ? (r.replace('ROLE_', '') as UserRole) : (r as UserRole)
+    );
+
+    const user: AuthUser = {
+      username: decoded.sub,
+      email: decoded.email ?? '',
+      roles,
+      customerId: decoded.customerId ?? null,
+      userId: decoded.userId ?? null,
+    };
+
+    this._token.set(token);
+    this._user.set(user);
+
+    localStorage.setItem('lbs_access_token', token);
+    localStorage.setItem('lbs_user', JSON.stringify(user));
+  } catch (e) {
+    throw new Error('Token OAuth2 inválido');
+  }
+}
 
   // ── Role helpers ────────────────────────────────────────────────────────
   hasRole(role: UserRole): boolean {
