@@ -378,13 +378,13 @@ export class AdminDashboardComponent {
   readonly Math = Math;
 
   readonly navItems: NavItem[] = [
-    { icon: '◈', label: 'Dashboard',   route: '/dashboard/admin' },
-    { icon: '◉', label: 'Usuarios',    route: '/dashboard/admin' },
-    { icon: '◎', label: 'Préstamos',   route: '/dashboard/admin' },
-    { icon: '◇', label: 'Clientes',    route: '/dashboard/admin' },
-    { icon: '◈', label: 'Pagos',       route: '/dashboard/admin' },
-    { icon: '○', label: 'Reportes',    route: '/dashboard/admin' },
-    { icon: '◦', label: 'Configuración', route: '/dashboard/admin' },
+    { icon: '◈', label: 'Dashboard',     route: '/dashboard/admin'  },
+    { icon: '◉', label: 'Usuarios',      route: '/dashboard/admin'  },
+    { icon: '◇', label: 'Préstamos',     route: '/loans'            },
+    { icon: '◎', label: 'Evaluaciones',  route: '/evaluations'      },
+    { icon: '○', label: 'Clientes',      route: '/dashboard/admin'  },
+    { icon: '◈', label: 'Pagos',         route: '/dashboard/admin'  },
+    { icon: '◦', label: 'Configuración', route: '/dashboard/admin'  },
   ];
 
   readonly stats = [

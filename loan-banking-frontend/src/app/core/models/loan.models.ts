@@ -44,6 +44,7 @@ export interface LoanResponse {
   approvalDate?: string;
   disbursementDate?: string;
   rejectionReason?: string;
+  dueDate?: string;
 }
 
 export interface LoanType {

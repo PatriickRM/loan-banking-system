@@ -1,15 +1,17 @@
-import { Component, inject, input, output } from '@angular/core';
+import { Component, inject, input, computed } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { AuthService } from '../../core/services/auth.service'
+import { AuthService } from '../../core/services/auth.service';
 
 export interface NavItem {
   icon: string;
   label: string;
   route: string;
+  roles?: string[];
 }
 
 @Component({
   selector: 'app-sidebar',
+  standalone: true,
   imports: [RouterLink, RouterLinkActive],
   template: `
     <aside class="sidebar">
@@ -24,7 +26,7 @@ export interface NavItem {
 
       <!-- Nav -->
       <nav class="sidebar-nav">
-        @for (item of navItems(); track item.route) {
+        @for (item of navItems(); track item.route + item.label) {
           <a
             [routerLink]="item.route"
             routerLinkActive="active"
@@ -45,7 +47,7 @@ export interface NavItem {
             <div class="user-role mono">{{ auth.user()?.roles?.[0] ?? '' }}</div>
           </div>
         </div>
-        <button class="logout-btn" (click)="auth.logout()">
+        <button class="logout-btn" (click)="auth.logout()" title="Cerrar sesión">
           <span>⏻</span>
         </button>
       </div>
@@ -60,6 +62,8 @@ export interface NavItem {
       height: 100vh;
       position: sticky;
       top: 0;
+      width: 220px;
+      flex-shrink: 0;
     }
 
     .sidebar-logo {
@@ -77,23 +81,12 @@ export interface NavItem {
       flex-shrink: 0;
     }
 
-    .logo-title {
-      font-weight: 700;
-      font-size: 15px;
-      letter-spacing: 0.08em;
-      color: var(--text-primary);
-    }
-
-    .logo-sub {
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    .logo-title { font-weight: 700; font-size: 15px; letter-spacing: 0.08em; color: var(--text-primary); }
+    .logo-sub { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); }
 
     .sidebar-nav {
       flex: 1;
-      padding: 12px 12px;
+      padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 2px;
@@ -125,12 +118,7 @@ export interface NavItem {
       border-color: rgba(59,130,246,0.2);
     }
 
-    .nav-icon {
-      font-size: 15px;
-      width: 20px;
-      text-align: center;
-      flex-shrink: 0;
-    }
+    .nav-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
 
     .sidebar-footer {
       padding: 16px;
@@ -140,13 +128,7 @@ export interface NavItem {
       gap: 10px;
     }
 
-    .user-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-      min-width: 0;
-    }
+    .user-card { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 
     .user-avatar {
       width: 32px;
@@ -164,9 +146,7 @@ export interface NavItem {
       flex-shrink: 0;
     }
 
-    .user-info {
-      min-width: 0;
-    }
+    .user-info { min-width: 0; }
 
     .user-name {
       font-size: 13px;
@@ -177,12 +157,7 @@ export interface NavItem {
       text-overflow: ellipsis;
     }
 
-    .user-role {
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    .user-role { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
 
     .logout-btn {
       width: 32px;
@@ -213,6 +188,7 @@ export class SidebarComponent {
   readonly navItems = input.required<NavItem[]>();
   readonly roleLabel = input<string>('');
 
-  readonly avatarChar = () =>
-    (this.auth.user()?.username?.[0] ?? '?').toUpperCase();
+  readonly avatarChar = computed(() =>
+    (this.auth.user()?.username?.[0] ?? '?').toUpperCase()
+  );
 }
