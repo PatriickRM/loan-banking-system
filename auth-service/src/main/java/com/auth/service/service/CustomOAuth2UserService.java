@@ -43,6 +43,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                         .map(role -> new SimpleGrantedAuthority(role.getName()))
                         .toList(),
                 user.getId(),
+                user.getCustomerId(),
                 user.getEmail(),
                 user.getEnabled(),
                 user.getEmailVerified(),
