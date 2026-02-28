@@ -25,7 +25,13 @@ export const routes: Routes = [
       {
         path: 'oauth2/redirect',
         loadComponent: () =>
-          import('./features/auth/pages/oauth-redirect/oauth-redirect.component').then(m => m.OAuthRedirectComponent),
+          import('./features/auth/pages/oauth-redirect/oauth-redirect.component').then(m => m.OAuth2RedirectComponent),
+      },
+      {
+        path: 'complete-profile',
+        loadComponent: () =>
+          import('./features/auth/pages/complete-profile/complete-profile.component')
+            .then(m => m.CompleteProfileComponent),
       },
     ],
   },

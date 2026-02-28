@@ -32,8 +32,8 @@ public class AuthController {
         return ResponseEntity.ok(authService.verifyEmail(token));
     }
 
-    @PutMapping("/api/auth/link-customer")
-    @PreAuthorize("hasRole('CLIENTE')")
+    @PutMapping("/link-customer")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ROLE_CLIENTE')")
     public ResponseEntity<Void> linkCustomer(@RequestParam Long customerId,
                                              Authentication auth) {
         authService.linkCustomerId(auth.getName(), customerId);

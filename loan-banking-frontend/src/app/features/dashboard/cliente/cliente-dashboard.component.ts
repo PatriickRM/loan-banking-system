@@ -1,10 +1,13 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { SidebarComponent, NavItem } from '../../../shared/components/sidebar.component';
 import { AuthService } from '../../../core/services/auth.service';
 import { LoanService } from '../../../core/services/loan.service';
+import { PaymentService } from '../../../core/services/payment.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LoanResponse, LoanStatus } from '../../../core/models/loan.models';
+import { PaymentScheduleResponse } from '../../../core/models/payment.models';
 import { LoanRequestComponent } from '../../../features/loan/loan-request.component';
 import { LoanDetailComponent } from '../../../features/loan/loan-detail.component';
 import { NotificationPanelComponent } from '../../../features/notification/notification-panel.component';
@@ -26,7 +29,7 @@ import { NotificationPanelComponent } from '../../../features/notification/notif
 
       <main class="dashboard-content">
 
-        <!-- Top bar with notification bell -->
+        <!-- Top bar -->
         <div class="top-bar anim-fade-up">
           <div>
             <div class="page-eyebrow mono">MI CUENTA</div>
@@ -35,7 +38,6 @@ import { NotificationPanelComponent } from '../../../features/notification/notif
             </h1>
           </div>
           <div class="top-actions">
-            <!-- Notification bell -->
             <button
               class="bell-btn"
               (click)="showNotifs.set(!showNotifs())"
@@ -69,6 +71,43 @@ import { NotificationPanelComponent } from '../../../features/notification/notif
             </div>
           </div>
         </div>
+
+        <!-- ── Next payment widget ── -->
+        @if (nextPayment()) {
+          <div
+            class="next-payment-banner anim-fade-up"
+            [class.urgent]="nextPayment()!.isOverdue || nextPayment()!.daysUntilDue <= 7"
+            style="animation-delay:80ms"
+          >
+            <div class="npb-left">
+              <div class="npb-eyebrow mono">
+                {{ nextPayment()!.isOverdue ? '⚠ PAGO VENCIDO' : '📅 PRÓXIMA CUOTA' }}
+              </div>
+              <div class="npb-amount mono">S/ {{ nextPayment()!.amount | number:'1.2-2' }}</div>
+              <div class="npb-sub">
+                @if (nextPayment()!.isOverdue) {
+                  <span class="text-danger">
+                    Venció hace {{ absVal(nextPayment()!.daysUntilDue) }} días — con mora S/ {{ (nextPayment()!.amount * 0.05) | number:'1.2-2' }}
+                  </span>
+                } @else {
+                  <span>Vence el {{ nextPayment()!.dueDate | date:'dd MMM yyyy' }}
+                    <span [class]="nextPayment()!.daysUntilDue <= 7 ? 'text-warning' : 'text-muted'">
+                      · en {{ nextPayment()!.daysUntilDue }} días
+                    </span>
+                  </span>
+                }
+              </div>
+            </div>
+            <div class="npb-right">
+              <div class="npb-installment mono text-muted">
+                Cuota #{{ nextPayment()!.installmentNumber }}
+              </div>
+              <button class="npb-pay-btn" (click)="goToPayments()">
+                {{ nextPayment()!.isOverdue ? 'Regularizar ahora' : 'Pagar ahora' }} →
+              </button>
+            </div>
+          </div>
+        }
 
         <!-- Stats row -->
         <div class="stats-row anim-fade-up" style="animation-delay:100ms">
@@ -123,7 +162,9 @@ import { NotificationPanelComponent } from '../../../features/notification/notif
                         <div class="progress-text mono">{{ paidPct(loan) }}% pagado</div>
                       </div>
                     } @else {
-                      <div class="loan-purpose text-muted">{{ loan.purpose | slice:0:50 }}{{ loan.purpose.length > 50 ? '...' : '' }}</div>
+                      <div class="loan-purpose text-muted">
+                        {{ loan.purpose | slice:0:50 }}{{ loan.purpose.length > 50 ? '...' : '' }}
+                      </div>
                     }
                     <div class="loan-date mono text-muted">
                       {{ loan.applicationDate | date:'dd MMM yyyy' }}
@@ -140,7 +181,14 @@ import { NotificationPanelComponent } from '../../../features/notification/notif
                     <span class="loan-status-chip" [class]="statusClass(loan.status)">
                       {{ statusLabel(loan.status) }}
                     </span>
-                    <div class="detail-arrow">→</div>
+                    @if (isActive(loan.status)) {
+                      <button
+                        class="quick-pay-btn"
+                        (click)="$event.stopPropagation(); goToPayments()"
+                      >
+                        Pagar →
+                      </button>
+                    }
                   </div>
 
                 </div>
@@ -172,289 +220,157 @@ import { NotificationPanelComponent } from '../../../features/notification/notif
     }
   `,
   styles: [`
-    .top-bar {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 24px;
-    }
+    .top-bar { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+    .page-eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-muted); margin-bottom:6px; }
+    .page-title { font-size:26px; font-weight:800; }
+    .accent-name { color:var(--accent-bright); }
+    .top-actions { display:flex; align-items:center; gap:12px; margin-top:4px; }
 
-    .page-eyebrow {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    .page-title { font-size: 26px; font-weight: 800; }
-    .accent-name { color: var(--accent-bright); }
-
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-top: 4px;
-    }
-
-    /* Bell */
-    .bell-btn {
-      position: relative;
-      width: 40px;
-      height: 40px;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      transition: all var(--t-fast);
-    }
-
-    .bell-btn:hover, .bell-btn.active {
-      background: var(--bg-hover);
-      border-color: var(--accent);
-    }
-
-    .bell-badge {
-      position: absolute;
-      top: -5px;
-      right: -5px;
-      background: var(--danger);
-      color: #fff;
-      font-size: 10px;
-      padding: 1px 5px;
-      border-radius: 100px;
-      min-width: 18px;
-      text-align: center;
-    }
+    .bell-btn { position:relative; width:40px; height:40px; background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-md); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; transition:all var(--t-fast); }
+    .bell-btn:hover, .bell-btn.active { background:var(--bg-hover); border-color:var(--accent); }
+    .bell-badge { position:absolute; top:-5px; right:-5px; background:var(--danger); color:#fff; font-size:10px; padding:1px 5px; border-radius:100px; min-width:18px; text-align:center; }
 
     /* Credit banner */
-    .credit-banner {
+    .credit-banner { background:var(--bg-card); border:1px solid var(--border-dim); border-radius:var(--radius-xl); padding:22px 26px; margin-bottom:16px; display:flex; align-items:center; gap:40px; }
+    .credit-info { flex-shrink:0; }
+    .credit-label { font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--text-muted); margin-bottom:4px; }
+    .credit-score { font-size:48px; font-weight:400; color:var(--success); line-height:1; margin-bottom:6px; letter-spacing:-0.03em; }
+    .credit-desc { font-size:12px; color:var(--text-secondary); }
+    .credit-meter { flex:1; }
+    .meter-track { position:relative; height:8px; background:var(--bg-elevated); border-radius:4px; margin-bottom:8px; overflow:visible; }
+    .meter-fill { height:100%; background:linear-gradient(90deg, var(--danger), var(--warning), var(--success)); border-radius:4px; }
+    .meter-thumb { position:absolute; top:50%; transform:translate(-50%,-50%); width:16px; height:16px; border-radius:50%; background:var(--success); border:2px solid var(--bg-card); box-shadow:0 0 8px var(--success); }
+    .meter-labels { display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); }
+
+    /* ── Next payment banner ── */
+    .next-payment-banner {
       background: var(--bg-card);
       border: 1px solid var(--border-dim);
       border-radius: var(--radius-xl);
-      padding: 22px 26px;
-      margin-bottom: 18px;
+      padding: 18px 22px;
+      margin-bottom: 16px;
       display: flex;
       align-items: center;
-      gap: 40px;
-    }
-
-    .credit-info { flex-shrink: 0; }
-
-    .credit-label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--text-muted);
-      margin-bottom: 4px;
-    }
-
-    .credit-score {
-      font-size: 48px;
-      font-weight: 400;
-      color: var(--success);
-      line-height: 1;
-      margin-bottom: 6px;
-      letter-spacing: -0.03em;
-    }
-
-    .credit-desc { font-size: 12px; color: var(--text-secondary); }
-
-    .credit-meter { flex: 1; }
-
-    .meter-track {
-      position: relative;
-      height: 8px;
-      background: var(--bg-elevated);
-      border-radius: 4px;
-      margin-bottom: 8px;
-      overflow: visible;
-    }
-
-    .meter-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--danger), var(--warning), var(--success));
-      border-radius: 4px;
-    }
-
-    .meter-thumb {
-      position: absolute;
-      top: 50%;
-      transform: translate(-50%, -50%);
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: var(--success);
-      border: 2px solid var(--bg-card);
-      box-shadow: 0 0 8px var(--success);
-    }
-
-    .meter-labels {
-      display: flex;
       justify-content: space-between;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    /* Stats */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    .client-stat {
-      background: var(--bg-card);
-      border: 1px solid var(--border-dim);
-      border-radius: var(--radius-xl);
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      gap: 20px;
       transition: all var(--t-fast);
     }
 
-    .client-stat:hover { border-color: var(--border-subtle); }
+    .next-payment-banner.urgent {
+      border-color: rgba(234,179,8,0.4);
+      background: rgba(234,179,8,0.04);
+    }
 
-    .cs-icon { font-size: 20px; }
-    .cs-value { font-family: var(--font-mono); font-size: 20px; color: var(--text-primary); }
-    .cs-label { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .next-payment-banner.urgent.overdue-style {
+      border-color: rgba(239,68,68,0.4);
+      background: rgba(239,68,68,0.04);
+    }
+
+    .npb-left { display:flex; flex-direction:column; gap:4px; }
+    .npb-eyebrow { font-size:10px; letter-spacing:0.12em; color:var(--text-muted); }
+    .npb-amount { font-size:28px; color:var(--text-primary); letter-spacing:-0.02em; }
+    .npb-sub { font-size:12px; color:var(--text-secondary); }
+
+    .npb-right { display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0; }
+    .npb-installment { font-size:12px; }
+    .npb-pay-btn {
+      padding: 10px 20px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius-lg);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--t-fast);
+      white-space: nowrap;
+    }
+    .npb-pay-btn:hover { background:var(--accent-bright); transform:translateY(-1px); box-shadow:0 4px 14px rgba(59,130,246,0.35); }
+
+    /* Stats */
+    .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+    .client-stat { background:var(--bg-card); border:1px solid var(--border-dim); border-radius:var(--radius-xl); padding:16px; display:flex; align-items:center; gap:12px; transition:all var(--t-fast); }
+    .client-stat:hover { border-color:var(--border-subtle); }
+    .cs-icon { font-size:20px; }
+    .cs-value { font-family:var(--font-mono); font-size:20px; color:var(--text-primary); }
+    .cs-label { font-size:11px; color:var(--text-muted); margin-top:2px; }
 
     /* Loans list */
-    .loans-list { display: flex; flex-direction: column; gap: 2px; }
+    .loans-list { display:flex; flex-direction:column; gap:2px; }
+    .loan-card { display:grid; grid-template-columns:130px 1fr auto; align-items:center; gap:20px; padding:16px; border-radius:var(--radius-md); border:1px solid transparent; cursor:pointer; transition:all var(--t-fast); }
+    .loan-card:hover { background:var(--bg-elevated); border-color:var(--border-dim); }
+    .loan-id { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+    .loan-type { font-size:12px; color:var(--text-secondary); margin-bottom:4px; }
+    .loan-amount { font-family:var(--font-mono); font-size:18px; color:var(--text-primary); }
+    .progress-wrap { margin-bottom:6px; }
+    .progress-track { height:4px; background:var(--bg-card); border-radius:2px; overflow:hidden; margin-bottom:4px; }
+    .progress-bar { height:100%; background:var(--accent); border-radius:2px; transition:width 0.6s ease; }
+    .progress-text { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
+    .loan-purpose { font-size:12px; margin-bottom:4px; }
+    .loan-date { font-size:11px; }
+    .loan-right { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+    .loan-installment { text-align:right; }
+    .inst-label { font-size:10px; color:var(--text-muted); letter-spacing:0.06em; }
+    .inst-amount { font-size:16px; color:var(--text-primary); }
+    .loan-status-chip { padding:3px 10px; border-radius:100px; font-family:var(--font-mono); font-size:10px; letter-spacing:0.06em; white-space:nowrap; }
+    .chip-pending   { background:var(--warning-dim); color:var(--warning); }
+    .chip-approved  { background:var(--success-dim); color:var(--success); }
+    .chip-active    { background:var(--accent-dim);  color:var(--accent-bright); }
+    .chip-rejected  { background:var(--danger-dim);  color:var(--danger); }
+    .chip-completed { background:rgba(148,163,184,0.1); color:#94a3b8; }
+    .chip-defaulted { background:var(--danger-dim);  color:var(--danger); }
+    .chip-cancelled { background:var(--border-dim);  color:var(--text-muted); }
 
-    .loan-card {
-      display: grid;
-      grid-template-columns: 130px 1fr auto;
-      align-items: center;
-      gap: 20px;
-      padding: 16px;
-      border-radius: var(--radius-md);
-      border: 1px solid transparent;
+    .quick-pay-btn {
+      padding: 4px 12px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      border-radius: var(--radius-sm);
+      color: var(--accent-bright);
+      font-family: var(--font-mono);
+      font-size: 11px;
       cursor: pointer;
       transition: all var(--t-fast);
     }
+    .quick-pay-btn:hover { background:var(--accent-dim); }
 
-    .loan-card:hover {
-      background: var(--bg-elevated);
-      border-color: var(--border-dim);
-    }
+    .section-title { font-size:14px; font-weight:600; }
+    .header-right { display:flex; align-items:center; gap:10px; }
+    .empty-state { text-align:center; padding:48px 20px; color:var(--text-muted); }
+    .empty-icon { font-size:32px; margin-bottom:10px; opacity:0.3; }
+    .spinner-sm { width:14px; height:14px; border:2px solid var(--border-subtle); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    .loan-id    { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
-    .loan-type  { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
-    .loan-amount { font-family: var(--font-mono); font-size: 18px; color: var(--text-primary); }
-
-    .progress-wrap { margin-bottom: 6px; }
-
-    .progress-track {
-      height: 4px;
-      background: var(--bg-card);
-      border-radius: 2px;
-      overflow: hidden;
-      margin-bottom: 4px;
-    }
-
-    .progress-bar {
-      height: 100%;
-      background: var(--accent);
-      border-radius: 2px;
-      transition: width 0.6s ease;
-    }
-
-    .progress-text { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
-
-    .loan-purpose { font-size: 12px; margin-bottom: 4px; }
-    .loan-date    { font-size: 11px; }
-
-    .loan-right {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 8px;
-    }
-
-    .loan-installment { text-align: right; }
-    .inst-label  { font-size: 10px; color: var(--text-muted); letter-spacing: 0.06em; }
-    .inst-amount { font-size: 16px; color: var(--text-primary); }
-
-    .loan-status-chip {
-      padding: 3px 10px;
-      border-radius: 100px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      white-space: nowrap;
-    }
-
-    .chip-pending   { background: var(--warning-dim); color: var(--warning); }
-    .chip-approved  { background: var(--success-dim); color: var(--success); }
-    .chip-active    { background: var(--accent-dim);  color: var(--accent-bright); }
-    .chip-rejected  { background: var(--danger-dim);  color: var(--danger); }
-    .chip-completed { background: rgba(148,163,184,0.1); color: #94a3b8; }
-    .chip-defaulted { background: var(--danger-dim);  color: var(--danger); }
-    .chip-cancelled { background: var(--border-dim);  color: var(--text-muted); }
-
-    .detail-arrow { color: var(--text-muted); font-size: 14px; }
-
-    /* Section title */
-    .section-title { font-size: 14px; font-weight: 600; }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    /* Empty */
-    .empty-state {
-      text-align: center;
-      padding: 48px 20px;
-      color: var(--text-muted);
-    }
-
-    .empty-icon { font-size: 32px; margin-bottom: 10px; opacity: 0.3; }
-
-    .spinner-sm {
-      width: 14px;
-      height: 14px;
-      border: 2px solid var(--border-subtle);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    @media (max-width: 1100px) {
-      .credit-banner { flex-direction: column; gap: 16px; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .loan-card { grid-template-columns: 1fr auto; }
-      .loan-center { display: none; }
+    @media (max-width:1100px) {
+      .credit-banner { flex-direction:column; gap:16px; }
+      .stats-row { grid-template-columns:repeat(2,1fr); }
+      .loan-card { grid-template-columns:1fr auto; }
+      .loan-center { display:none; }
+      .next-payment-banner { flex-direction:column; align-items:flex-start; }
+      .npb-right { align-items:flex-start; }
     }
   `],
 })
 export class ClienteDashboardComponent implements OnInit {
-  readonly auth = inject(AuthService);
-  readonly loanService = inject(LoanService);
+  readonly auth         = inject(AuthService);
+  readonly loanService  = inject(LoanService);
+  readonly paymentService = inject(PaymentService);
   readonly notifService = inject(NotificationService);
+  private  readonly router = inject(Router);
 
-  readonly loans = signal<LoanResponse[]>([]);
-  readonly loadingLoans = signal(false);
-  readonly showLoanRequest = signal(false);
-  readonly showNotifs = signal(false);
-  readonly selectedLoan = signal<LoanResponse | null>(null);
+  readonly loans            = signal<LoanResponse[]>([]);
+  readonly loadingLoans     = signal(false);
+  readonly showLoanRequest  = signal(false);
+  readonly showNotifs       = signal(false);
+  readonly selectedLoan     = signal<LoanResponse | null>(null);
+  readonly nextPayment      = signal<PaymentScheduleResponse | null>(null);
 
   readonly navItems: NavItem[] = [
     { icon: '◈', label: 'Mi cuenta',     route: '/dashboard/cliente' },
     { icon: '◎', label: 'Mis préstamos', route: '/dashboard/cliente' },
-    { icon: '◇', label: 'Pagos',         route: '/dashboard/cliente' },
+    { icon: '◇', label: 'Pagos',         route: '/payments'          },
     { icon: '○', label: 'Documentos',    route: '/dashboard/cliente' },
-    { icon: '◦', label: 'Perfil',        route: '/dashboard/cliente' },
+    { icon: '◦', label: 'Perfil',        route: '/profile'           },
   ];
 
   ngOnInit(): void {
@@ -466,11 +382,22 @@ export class ClienteDashboardComponent implements OnInit {
       next: (loans) => {
         this.loans.set(loans);
         this.loadingLoans.set(false);
+        // Load next installment for the first active loan
+        const active = loans.filter((l) => l.status === 'ACTIVE');
+        if (active.length > 0) {
+          this.paymentService.getScheduleByLoan(active[0].id).subscribe({
+            next: (schedule) => {
+              const next = schedule.find(
+                (s) => s.status === 'PENDING' || s.status === 'OVERDUE'
+              );
+              this.nextPayment.set(next ?? null);
+            },
+          });
+        }
       },
       error: () => this.loadingLoans.set(false),
     });
 
-    // Load notifications count
     this.notifService.getNotificationsByUser(user.customerId).subscribe();
   }
 
@@ -483,24 +410,24 @@ export class ClienteDashboardComponent implements OnInit {
     });
   }
 
-  openDetail(loan: LoanResponse): void {
-    this.selectedLoan.set(loan);
-  }
+  openDetail(loan: LoanResponse): void { this.selectedLoan.set(loan); }
 
-  // ── Derived computed values ─────────────────────────────────────────────
+  goToPayments(): void { this.router.navigate(['/payments']); }
 
-  creditScore() {
-    const active = this.loans().filter((l) => isActive(l.status));
-    if (active.length === 0) return 650;
+  absVal(n: number): number { return Math.abs(n); }
+
+  // ── Computed helpers ────────────────────────────────────────────────
+
+  creditScore(): number {
     const hasDefault = this.loans().some((l) => l.status === 'DEFAULTED');
     return hasDefault ? 450 : 720;
   }
 
-  creditPct() {
+  creditPct(): number {
     return ((this.creditScore() - 300) / 550) * 100;
   }
 
-  creditLabel() {
+  creditLabel(): string {
     const score = this.creditScore();
     if (score >= 750) return 'Excelente — Acceso a las mejores tasas';
     if (score >= 650) return 'Bueno — Podés acceder a préstamos de hasta S/ 50,000';
@@ -509,22 +436,20 @@ export class ClienteDashboardComponent implements OnInit {
   }
 
   computedStats() {
-    const loans = this.loans();
-    const active = loans.filter((l) => isActive(l.status));
-    const debt = active.reduce((acc, l) => acc + (l.outstandingBalance ?? 0), 0);
+    const loans   = this.loans();
+    const active  = loans.filter((l) => isActive(l.status));
+    const debt    = active.reduce((acc, l) => acc + (l.outstandingBalance ?? 0), 0);
     const monthly = active.reduce((acc, l) => acc + (l.monthlyPayment ?? 0), 0);
 
     return [
       { icon: '📋', label: 'Préstamos activos', value: String(active.length) },
-      { icon: '💳', label: 'Deuda total', value: debt > 0 ? `S/${(debt / 1000).toFixed(0)}K` : 'S/0' },
-      { icon: '📅', label: 'Cuota mensual', value: monthly > 0 ? `S/${monthly.toFixed(0)}` : 'S/0' },
-      { icon: '✓', label: 'Historial', value: `${loans.filter((l) => l.status === 'COMPLETED').length} completados` },
+      { icon: '💳', label: 'Deuda total',        value: debt > 0 ? `S/${(debt / 1000).toFixed(0)}K` : 'S/0' },
+      { icon: '📅', label: 'Cuota mensual',      value: monthly > 0 ? `S/${monthly.toFixed(0)}` : 'S/0' },
+      { icon: '✓',  label: 'Historial',           value: `${loans.filter((l) => l.status === 'COMPLETED').length} completados` },
     ];
   }
 
-  isActive(status: LoanStatus): boolean {
-    return isActive(status);
-  }
+  isActive(status: LoanStatus): boolean { return isActive(status); }
 
   paidPct(loan: LoanResponse): number {
     if (!loan.totalAmount || !loan.outstandingBalance) return 0;

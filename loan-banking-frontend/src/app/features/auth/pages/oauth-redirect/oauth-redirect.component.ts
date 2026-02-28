@@ -1,130 +1,110 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../../core/services/auth.service';
 
+/**
+ * Ruta: /oauth2/redirect
+ *
+ * OAuth2SuccessHandler (backend) redirige aquí con:
+ *   ?token=JWT&expiresIn=86400
+ *
+ * Este componente guarda el token y redirige al dashboard según el rol.
+ */
 @Component({
-  selector: 'app-oauth-redirect',
-  standalone: true,
+  selector: 'app-oauth2-redirect',
+  imports: [],
   template: `
-    <div class="redirect-shell">
-      <div class="redirect-card anim-fade-up">
-        <div class="redirect-icon">
-          @if (error()) {
-            <span class="error-mark">✕</span>
-          } @else {
-            <span class="spinner-lg"></span>
-          }
-        </div>
-        <div class="redirect-label mono">
-          {{ error() ? 'ERROR DE AUTENTICACIÓN' : 'PROCESANDO ACCESO' }}
-        </div>
-        <p class="redirect-msg text-secondary">
-          {{ error() || 'Verificando credenciales...' }}
-        </p>
-        @if (error()) {
-          <a routerLink="/auth/login" class="btn btn-primary" style="margin-top:20px;">
-            Volver al login
-          </a>
+    <div class="oauth-redirect-shell">
+      <div class="oauth-redirect-card">
+        @if (error) {
+          <div class="oauth-error">
+            <span class="oauth-error-icon">✕</span>
+            <h2>Error de autenticación</h2>
+            <p>{{ error }}</p>
+            <a href="/auth/login" class="btn btn-primary">Volver al login</a>
+          </div>
+        } @else {
+          <div class="oauth-loading">
+            <div class="oauth-spinner"></div>
+            <p>Autenticando con {{ provider }}…</p>
+          </div>
         }
       </div>
     </div>
   `,
   styles: [`
-    .redirect-shell {
+    .oauth-redirect-shell {
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       background: var(--bg-void);
     }
-
-    .redirect-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
+    .oauth-redirect-card {
       text-align: center;
       padding: 48px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-xl);
-      min-width: 320px;
     }
-
-    .redirect-icon {
-      width: 64px;
-      height: 64px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .spinner-lg {
-      width: 44px;
-      height: 44px;
-      border: 3px solid var(--border-subtle);
+    .oauth-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border-dim);
       border-top-color: var(--accent-bright);
       border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: block;
+      animation: spin .8s linear infinite;
+      margin: 0 auto 16px;
     }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .error-mark {
-      font-size: 32px;
-      color: var(--danger);
-      width: 56px;
-      height: 56px;
+    .oauth-redirect-card p { color: var(--text-secondary); }
+    .oauth-error { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    .oauth-error-icon {
+      width: 48px; height: 48px;
+      background: rgba(239,68,68,.15);
+      color: #ef4444;
       border-radius: 50%;
-      background: var(--danger-dim);
-      border: 2px solid rgba(239,68,68,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      margin: 0 auto;
     }
-
-    .redirect-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      color: var(--accent-bright);
-    }
-
-    .redirect-msg {
-      font-size: 14px;
-      max-width: 260px;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   `],
-  imports: [],
 })
-export class OAuthRedirectComponent implements OnInit {
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
+export class OAuth2RedirectComponent implements OnInit {
+  private readonly route       = inject(ActivatedRoute);
+  private readonly router      = inject(Router);
   private readonly authService = inject(AuthService);
 
-  error = () => this._error;
-  private _error = '';
+  error    = '';
+  provider = '';
 
   ngOnInit(): void {
-    const token = this.route.snapshot.queryParamMap.get('token');
-    const errorParam = this.route.snapshot.queryParamMap.get('error');
+    const params     = this.route.snapshot.queryParamMap;
+    const token      = params.get('token');
+    const expiresIn  = params.get('expiresIn');
+    const errorParam = params.get('error');
 
-    if (errorParam) {
-      this._error = 'La autenticación con el proveedor falló. Intentá de nuevo.';
+    // ── Error desde el backend ──────────────────────────────────────
+    if (errorParam || !token) {
+      this.error = errorParam === 'oauth2_failed'
+        ? 'El proveedor rechazó la autenticación. Intentá de nuevo.'
+        : 'No se recibió un token válido.';
       return;
     }
 
-    if (!token) {
-      this._error = 'No se recibió token de autenticación.';
-      return;
-    }
+    // ── Detectar proveedor para el mensaje visual ───────────────────
+    this.provider = this.detectProvider();
 
+    // ── Guardar token y redirigir ───────────────────────────────────
     try {
-      this.authService.handleOAuthToken(token);
+      this.authService.saveOAuth2Token(token, Number(expiresIn ?? 86400));
       this.authService.redirectToDashboard();
     } catch {
-      this._error = 'Token inválido recibido del proveedor OAuth.';
+      this.error = 'Error al procesar el token. Intentá iniciar sesión nuevamente.';
     }
+  }
+
+  private detectProvider(): string {
+    // El referrer del browser suele indicar el proveedor
+    const ref = document.referrer.toLowerCase();
+    if (ref.includes('google')) return 'Google';
+    if (ref.includes('github')) return 'GitHub';
+    return 'tu cuenta';
   }
 }

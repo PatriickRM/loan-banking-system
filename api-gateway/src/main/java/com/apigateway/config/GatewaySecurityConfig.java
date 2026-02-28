@@ -69,16 +69,17 @@ public class GatewaySecurityConfig {
                         .pathMatchers(HttpMethod.POST, "/api/loans/{id}/reject").hasAnyRole("ANALISTA", "ADMIN")
 
                         // 4. COBRANZA
-                        .pathMatchers(HttpMethod.GET,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN")
+                        .pathMatchers(HttpMethod.GET,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN", "CLIENTE")
+                        .pathMatchers(HttpMethod.POST, "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN", "CLIENTE")
+                        .pathMatchers(HttpMethod.PUT,  "/api/payments/**").hasAnyRole("COBRANZA", "ADMIN", "CLIENTE")
 
                         // 5. ADMIN exclusivo
                         .pathMatchers(HttpMethod.POST, "/api/customers").hasAnyRole("ADMIN", "CLIENTE")
                         .pathMatchers(HttpMethod.DELETE, "/api/customers/**").hasRole("ADMIN")
                         .pathMatchers(HttpMethod.POST,   "/api/loans/{id}/disburse").hasRole("ADMIN")
                         .pathMatchers("/api/auth/users/**").hasRole("ADMIN")
-
+                        .pathMatchers("/oauth2/**").permitAll()
+                        .pathMatchers("/login/oauth2/**").permitAll()
                         .anyExchange().authenticated()
                 )
                 .addFilterAt(jwtAuthenticationFilter(), SecurityWebFiltersOrder.AUTHENTICATION)

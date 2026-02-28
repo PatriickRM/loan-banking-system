@@ -220,4 +220,21 @@ export class AuthService {
     );
     return JSON.parse(json) as DecodedToken;
   }
+
+  saveOAuth2Token(token: string, expiresIn: number): void {
+  // Decodificar el payload para extraer claims (sin librería externa)
+  const payload = JSON.parse(atob(token.split('.')[1]));
+
+  const authResponse: AuthResponse = {
+    token,
+    expiresIn,
+    username:  payload['sub']       ?? '',
+    email:     payload['email']     ?? '',
+    roles:     payload['roles']     ?? [],
+  };
+
+  // Reusar la lógica existente de persistencia de sesión
+  this.handleAuthSuccess(authResponse);
+}
+
 }
