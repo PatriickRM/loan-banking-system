@@ -15,7 +15,7 @@ import { CardPaymentComponent, CardPaymentResult } from './card-payment.componen
 
 @Component({
   selector: 'app-payment-page',
-  imports: [SidebarComponent, DecimalPipe, DatePipe, SlicePipe, UpperCasePipe, ReactiveFormsModule, CardPaymentComponent],
+  imports: [SidebarComponent, DecimalPipe, DatePipe, SlicePipe, ReactiveFormsModule, CardPaymentComponent, UpperCasePipe],
   template: `
     <div class="dashboard-layout">
       <app-sidebar [navItems]="navItems" roleLabel="CLIENTE" />

@@ -33,7 +33,7 @@ public class AuthController {
     }
 
     @PutMapping("/link-customer")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'ROLE_CLIENTE')")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> linkCustomer(@RequestParam Long customerId,
                                              Authentication auth) {
         authService.linkCustomerId(auth.getName(), customerId);

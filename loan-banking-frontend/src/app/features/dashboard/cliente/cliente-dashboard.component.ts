@@ -443,7 +443,7 @@ export class ClienteDashboardComponent implements OnInit {
 
     return [
       { icon: '📋', label: 'Préstamos activos', value: String(active.length) },
-      { icon: '💳', label: 'Deuda total',        value: debt > 0 ? `S/${(debt / 1000).toFixed(0)}K` : 'S/0' },
+      { icon: '💳', label: 'Deuda total', value: debt > 0 ? `S/ ${debt.toFixed(0)}` : 'S/0' },
       { icon: '📅', label: 'Cuota mensual',      value: monthly > 0 ? `S/${monthly.toFixed(0)}` : 'S/0' },
       { icon: '✓',  label: 'Historial',           value: `${loans.filter((l) => l.status === 'COMPLETED').length} completados` },
     ];
@@ -452,9 +452,25 @@ export class ClienteDashboardComponent implements OnInit {
   isActive(status: LoanStatus): boolean { return isActive(status); }
 
   paidPct(loan: LoanResponse): number {
-    if (!loan.totalAmount || !loan.outstandingBalance) return 0;
-    return Math.round(((loan.totalAmount - loan.outstandingBalance) / loan.totalAmount) * 100);
+    console.log('loan', loan.id, {
+    total: loan.totalAmount,
+    outstanding: loan.outstandingBalance,
+    monthly: loan.monthlyPayment
+  });
+
+  const total = loan.totalAmount ?? loan.amount;
+  if (!total || total <= 0) return 0;
+
+  // Si tenemos outstandingBalance, calculamos desde ahí
+  if (loan.outstandingBalance != null) {
+    const pct = Math.round(((total - loan.outstandingBalance) / total) * 100);
+    return Math.min(100, Math.max(0, pct));
   }
+
+  // Fallback: estimar desde approvedAmount y monthlyPayment
+  // (no tenemos datos suficientes → 0)
+  return 0;
+}
 
   statusLabel(status: LoanStatus): string {
     const labels: Record<LoanStatus, string> = {

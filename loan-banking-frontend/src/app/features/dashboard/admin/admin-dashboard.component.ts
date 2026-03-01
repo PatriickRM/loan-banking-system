@@ -1,10 +1,47 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { SidebarComponent, NavItem } from '../../../shared/components/sidebar.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { environment } from '../../../environments/environment';
+
+interface CustomerResponse {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  dni: string;
+  city: string;
+  createdAt: string;
+  monthlyIncome: number;
+}
+
+interface LoanResponse {
+  id: number;
+  customerId: number;
+  amount: number;
+  termMonths: number;
+  status: string;
+  loanType: string;
+  interestRate: number;
+  requestDate: string;
+  approvedAmount?: number;
+}
+
+interface PaymentScheduleResponse {
+  id: number;
+  loanId: number;
+  dueDate: string;
+  amount: number;
+  status: string;
+}
 
 @Component({
   selector: 'app-admin-dashboard',
-  imports: [SidebarComponent],
+  imports: [SidebarComponent, CommonModule, RouterModule],
   template: `
     <div class="dashboard-layout">
       <app-sidebar [navItems]="navItems" roleLabel="ADMINISTRADOR" />
@@ -18,120 +55,214 @@ import { AuthService } from '../../../core/services/auth.service';
             <h1 class="page-title">Administración</h1>
           </div>
           <div class="header-meta">
-            <div class="status-dot"></div>
-            <span class="mono text-muted" style="font-size:12px;">Sistema operativo</span>
+            @if (loading()) {
+              <div class="loading-dots">
+                <span></span><span></span><span></span>
+              </div>
+            } @else {
+              <div class="status-dot"></div>
+              <span class="mono text-muted" style="font-size:12px;">Datos actualizados</span>
+            }
           </div>
         </div>
 
+        @if (error()) {
+          <div class="alert alert-error anim-fade-up" style="margin-bottom:20px;">
+            ⚠ {{ error() }}
+          </div>
+        }
+
         <!-- Stats grid -->
         <div class="stats-grid anim-fade-up" style="animation-delay:80ms">
-          @for (stat of stats; track stat.label) {
-            <div class="stat-card">
-              <div class="stat-icon">{{ stat.icon }}</div>
-              <div class="stat-label">{{ stat.label }}</div>
-              <div class="stat-value mono">{{ stat.value }}</div>
-              <div class="stat-sub">
-                <span [class]="stat.trend > 0 ? 'text-success' : 'text-danger'">
-                  {{ stat.trend > 0 ? '↑' : '↓' }} {{ Math.abs(stat.trend) }}%
-                </span>
-                <span class="text-muted"> este mes</span>
-              </div>
+          <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-label">Total clientes</div>
+            <div class="stat-value mono">{{ customers().length }}</div>
+            <div class="stat-sub text-muted">registrados en el sistema</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">📋</div>
+            <div class="stat-label">Préstamos activos</div>
+            <div class="stat-value mono">{{ activeLoans() }}</div>
+            <div class="stat-sub text-muted">de {{ loans().length }} totales</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-label">Capital expuesto</div>
+            <div class="stat-value mono">S/ {{ totalCapital() | number:'1.0-0' }}</div>
+            <div class="stat-sub text-muted">en préstamos aprobados</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⏳</div>
+            <div class="stat-label">Pendientes aprob.</div>
+            <div class="stat-value mono">{{ pendingLoans() }}</div>
+            <div class="stat-sub" [class.text-warning]="pendingLoans() > 0" [class.text-muted]="pendingLoans() === 0">
+              {{ pendingLoans() > 0 ? 'requieren revisión' : 'sin pendientes' }}
             </div>
-          }
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">⚠️</div>
+            <div class="stat-label">Cuotas vencidas</div>
+            <div class="stat-value mono" [class.text-danger]="overduePayments().length > 0">
+              {{ overduePayments().length }}
+            </div>
+            <div class="stat-sub" [class.text-danger]="overduePayments().length > 0" [class.text-muted]="overduePayments().length === 0">
+              {{ overduePayments().length > 0 ? 'en mora' : 'al día' }}
+            </div>
+          </div>
         </div>
 
         <!-- Two column layout -->
         <div class="content-grid anim-fade-up" style="animation-delay:160ms">
 
-          <!-- Recent users table -->
+          <!-- Clientes recientes -->
           <div class="card">
             <div class="card-header">
-              <h3 class="section-title">Usuarios recientes</h3>
-              <div class="badge badge-admin">ADMIN</div>
+              <h3 class="section-title">Clientes recientes</h3>
+              <div class="badge badge-admin">{{ customers().length }} total</div>
             </div>
+            @if (loading()) {
+              <div class="skeleton-list">
+                @for (i of [1,2,3,4,5]; track i) {
+                  <div class="skeleton-row"></div>
+                }
+              </div>
+            } @else if (customers().length === 0) {
+              <div class="empty-state">Sin clientes registrados</div>
+            } @else {
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>DNI</th>
+                    <th>Ciudad</th>
+                    <th>Ingreso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (c of customers().slice(0, 6); track c.id) {
+                    <tr>
+                      <td>
+                        <div class="user-cell">
+                          <div class="mini-avatar">{{ c.firstName[0] }}{{ c.lastName[0] }}</div>
+                          <div>
+                            <div style="color:var(--text-primary);font-size:13px;">
+                              {{ c.firstName }} {{ c.lastName }}
+                            </div>
+                            <div class="mono" style="font-size:11px;color:var(--text-muted);">
+                              {{ c.email }}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="mono" style="font-size:12px;">{{ c.dni }}</td>
+                      <td style="font-size:12px;color:var(--text-secondary);">{{ c.city }}</td>
+                      <td class="mono" style="font-size:12px;">
+                        S/ {{ c.monthlyIncome | number:'1.0-0' }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
+
+          <!-- Estado de préstamos -->
+          <div class="card">
+            <div class="card-header">
+              <h3 class="section-title">Estado de préstamos</h3>
+              <div class="badge badge-admin">LIVE</div>
+            </div>
+            @if (loading()) {
+              <div class="skeleton-list">
+                @for (i of [1,2,3,4]; track i) {
+                  <div class="skeleton-row"></div>
+                }
+              </div>
+            } @else {
+              <div class="loan-bars" style="padding-top:8px;">
+                @for (stat of loanStats(); track stat.label) {
+                  <div class="bar-item">
+                    <div class="bar-label mono">{{ stat.label }}</div>
+                    <div class="bar-track">
+                      <div class="bar-fill {{ stat.type }}"
+                           [style.width.%]="stat.pct"></div>
+                    </div>
+                    <div class="bar-value mono">{{ stat.count }}</div>
+                  </div>
+                }
+              </div>
+
+              <!-- Próximos vencimientos -->
+              @if (upcomingPayments().length > 0) {
+                <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-dim);">
+                  <div class="mono" style="font-size:10px;color:var(--text-muted);letter-spacing:0.1em;margin-bottom:10px;">
+                    PRÓXIMAS CUOTAS (7 DÍAS)
+                  </div>
+                  @for (p of upcomingPayments().slice(0, 3); track p.id) {
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-dim);">
+                      <span style="font-size:12px;color:var(--text-secondary);">Préstamo #{{ p.loanId }}</span>
+                      <span class="mono" style="font-size:12px;">S/ {{ p.amount | number:'1.2-2' }}</span>
+                      <span class="mono" style="font-size:11px;color:var(--warning);">{{ p.dueDate | date:'dd/MM' }}</span>
+                    </div>
+                  }
+                </div>
+              }
+            }
+          </div>
+
+        </div>
+
+        <!-- Préstamos recientes tabla -->
+        <div class="card anim-fade-up" style="animation-delay:240ms">
+          <div class="card-header">
+            <h3 class="section-title">Préstamos recientes</h3>
+            <div class="badge badge-admin">{{ loans().length }} total</div>
+          </div>
+          @if (loading()) {
+            <div class="skeleton-list">
+              @for (i of [1,2,3,4,5]; track i) {
+                <div class="skeleton-row"></div>
+              }
+            </div>
+          } @else if (loans().length === 0) {
+            <div class="empty-state">Sin préstamos registrados</div>
+          } @else {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Usuario</th>
-                  <th>Rol</th>
+                  <th>#ID</th>
+                  <th>Cliente ID</th>
+                  <th>Monto</th>
+                  <th>Plazo</th>
+                  <th>Tipo</th>
+                  <th>TEA</th>
                   <th>Estado</th>
                   <th>Fecha</th>
                 </tr>
               </thead>
               <tbody>
-                @for (user of recentUsers; track user.id) {
+                @for (loan of loans().slice(0, 10); track loan.id) {
                   <tr>
+                    <td class="mono" style="font-size:12px;color:var(--text-muted);">#{{ loan.id }}</td>
+                    <td class="mono" style="font-size:12px;">{{ loan.customerId }}</td>
+                    <td class="mono" style="font-size:13px;">S/ {{ loan.amount | number:'1.0-0' }}</td>
+                    <td style="font-size:12px;color:var(--text-secondary);">{{ loan.termMonths }}m</td>
+                    <td style="font-size:12px;">{{ loan.loanType }}</td>
+                    <td class="mono" style="font-size:12px;">{{ loan.interestRate }}%</td>
                     <td>
-                      <div class="user-cell">
-                        <div class="mini-avatar">{{ user.username[0].toUpperCase() }}</div>
-                        <div>
-                          <div style="color:var(--text-primary);font-size:13px;">{{ user.username }}</div>
-                          <div class="mono" style="font-size:11px;color:var(--text-muted);">{{ user.email }}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span class="badge" [class]="'badge-' + user.role.toLowerCase()">
-                        {{ user.role }}
+                      <span class="loan-badge" [class]="'loan-' + loan.status.toLowerCase()">
+                        {{ loan.status }}
                       </span>
                     </td>
-                    <td>
-                      <span class="status-pill" [class.active]="user.active">
-                        {{ user.active ? 'Activo' : 'Inactivo' }}
-                      </span>
+                    <td class="mono" style="font-size:11px;color:var(--text-muted);">
+                      {{ loan.requestDate | date:'dd/MM/yy' }}
                     </td>
-                    <td class="mono" style="font-size:12px;">{{ user.date }}</td>
                   </tr>
                 }
               </tbody>
             </table>
-          </div>
-
-          <!-- System status panel -->
-          <div class="card">
-            <div class="card-header">
-              <h3 class="section-title">Microservicios</h3>
-              <div class="badge badge-admin">LIVE</div>
-            </div>
-            <div class="services-list">
-              @for (svc of services; track svc.name) {
-                <div class="service-row">
-                  <div class="service-indicator" [class.up]="svc.up"></div>
-                  <div class="service-info">
-                    <div class="service-name">{{ svc.name }}</div>
-                    <div class="mono service-url">{{ svc.route }}</div>
-                  </div>
-                  <div class="service-latency mono" [class.high]="svc.ms > 200">
-                    {{ svc.up ? svc.ms + 'ms' : 'DOWN' }}
-                  </div>
-                </div>
-              }
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Loans overview -->
-        <div class="card anim-fade-up" style="animation-delay:240ms">
-          <div class="card-header">
-            <h3 class="section-title">Resumen de préstamos</h3>
-            <div class="tab-group">
-              <button class="tab active">7 días</button>
-              <button class="tab">30 días</button>
-              <button class="tab">Año</button>
-            </div>
-          </div>
-          <div class="loan-bars">
-            @for (bar of loanData; track bar.label) {
-              <div class="bar-item">
-                <div class="bar-label mono">{{ bar.label }}</div>
-                <div class="bar-track">
-                  <div class="bar-fill" [style.width.%]="bar.pct" [class]="bar.type"></div>
-                </div>
-                <div class="bar-value mono">{{ bar.count }}</div>
-              </div>
-            }
-          </div>
+          }
         </div>
 
       </main>
@@ -144,7 +275,6 @@ import { AuthService } from '../../../core/services/auth.service';
       justify-content: space-between;
       margin-bottom: 28px;
     }
-
     .page-eyebrow {
       font-size: 11px;
       text-transform: uppercase;
@@ -152,79 +282,69 @@ import { AuthService } from '../../../core/services/auth.service';
       color: var(--text-muted);
       margin-bottom: 6px;
     }
-
-    .page-title {
-      font-size: 26px;
-      font-weight: 800;
-    }
-
-    .header-meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 6px;
-    }
+    .page-title { font-size: 26px; font-weight: 800; }
+    .header-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 8px; height: 8px;
       border-radius: 50%;
       background: var(--success);
       animation: pulse-glow 2s infinite;
-      box-shadow: 0 0 0 0 var(--success);
     }
-
     @keyframes pulse-glow {
       0%,100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
       50% { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
     }
 
+    .loading-dots { display: flex; gap: 4px; align-items: center; }
+    .loading-dots span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent);
+      animation: bounce 1.2s infinite;
+    }
+    .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
     /* Stats */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
       margin-bottom: 24px;
     }
-
     .stat-card {
       background: var(--bg-card);
       border: 1px solid var(--border-dim);
       border-radius: var(--radius-xl);
-      padding: 20px;
+      padding: 18px;
       transition: all var(--t-fast);
     }
-
     .stat-card:hover {
       border-color: var(--border-subtle);
       background: var(--bg-hover);
       transform: translateY(-1px);
     }
-
-    .stat-icon {
-      font-size: 20px;
-      margin-bottom: 12px;
-      filter: grayscale(0.3);
-    }
-
+    .stat-icon { font-size: 18px; margin-bottom: 10px; }
     .stat-label {
       font-family: var(--font-mono);
       font-size: 10px;
       text-transform: uppercase;
       letter-spacing: 0.1em;
       color: var(--text-muted);
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
-
     .stat-value {
-      font-size: 30px;
+      font-size: 26px;
       font-weight: 400;
       color: var(--text-primary);
       letter-spacing: -0.02em;
       margin-bottom: 4px;
     }
-
-    .stat-sub { font-size: 12px; }
+    .stat-sub { font-size: 11px; }
 
     /* Content grid */
     .content-grid {
@@ -233,187 +353,153 @@ import { AuthService } from '../../../core/services/auth.service';
       gap: 20px;
       margin-bottom: 24px;
     }
-
-    .section-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
+    .section-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 
     /* User cell */
-    .user-cell {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
+    .user-cell { display: flex; align-items: center; gap: 10px; }
     .mini-avatar {
-      width: 28px;
-      height: 28px;
+      width: 28px; height: 28px;
       border-radius: 50%;
       background: var(--bg-elevated);
       border: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      color: var(--text-secondary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: var(--text-secondary);
       flex-shrink: 0;
       font-family: var(--font-mono);
+      font-weight: 600;
     }
 
-    .status-pill {
+    /* Loan badge */
+    .loan-badge {
       font-family: var(--font-mono);
-      font-size: 11px;
-      padding: 2px 8px;
+      font-size: 10px;
+      padding: 2px 7px;
       border-radius: 100px;
-      background: var(--danger-dim);
-      color: var(--danger);
-      border: 1px solid rgba(239,68,68,0.2);
-    }
-
-    .status-pill.active {
-      background: var(--success-dim);
-      color: var(--success);
-      border-color: rgba(34,197,94,0.2);
-    }
-
-    /* Services */
-    .services-list { display: flex; flex-direction: column; gap: 12px; }
-
-    .service-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 10px 12px;
-      background: var(--bg-elevated);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-dim);
-    }
-
-    .service-indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--danger);
-      flex-shrink: 0;
-    }
-
-    .service-indicator.up { background: var(--success); }
-
-    .service-info { flex: 1; min-width: 0; }
-    .service-name { font-size: 13px; color: var(--text-primary); font-weight: 500; }
-    .service-url  { font-size: 11px; color: var(--text-muted); letter-spacing: 0.04em; }
-
-    .service-latency {
-      font-size: 12px;
-      color: var(--success);
-    }
-
-    .service-latency.high { color: var(--warning); }
-
-    /* Tab group */
-    .tab-group { display: flex; gap: 4px; }
-
-    .tab {
-      padding: 4px 12px;
-      border-radius: var(--radius-sm);
-      background: transparent;
-      border: 1px solid var(--border-dim);
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      font-size: 11px;
-      cursor: pointer;
-      transition: all var(--t-fast);
-    }
-
-    .tab.active, .tab:hover {
-      background: var(--accent-dim);
-      border-color: rgba(59,130,246,0.25);
-      color: var(--accent-bright);
-    }
-
-    /* Loan bars */
-    .loan-bars { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
-
-    .bar-item { display: flex; align-items: center; gap: 14px; }
-
-    .bar-label {
-      width: 90px;
-      font-size: 12px;
-      color: var(--text-muted);
-      flex-shrink: 0;
+      font-weight: 600;
       letter-spacing: 0.04em;
     }
+    .loan-pending   { background: rgba(234,179,8,0.15);  color: #eab308; border: 1px solid rgba(234,179,8,0.2); }
+    .loan-approved  { background: rgba(34,197,94,0.12);  color: var(--success); border: 1px solid rgba(34,197,94,0.2); }
+    .loan-active    { background: rgba(59,130,246,0.12); color: var(--accent-bright); border: 1px solid rgba(59,130,246,0.2); }
+    .loan-rejected  { background: rgba(239,68,68,0.12);  color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+    .loan-completed { background: rgba(148,163,184,0.1); color: var(--text-muted); border: 1px solid var(--border-dim); }
+    .loan-disbursed { background: rgba(168,85,247,0.12); color: #a855f7; border: 1px solid rgba(168,85,247,0.2); }
 
-    .bar-track {
-      flex: 1;
-      height: 6px;
-      background: var(--bg-elevated);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-
+    /* Loan bars */
+    .loan-bars { display: flex; flex-direction: column; gap: 14px; }
+    .bar-item { display: flex; align-items: center; gap: 14px; }
+    .bar-label { width: 90px; font-size: 11px; color: var(--text-muted); flex-shrink: 0; letter-spacing: 0.04em; }
+    .bar-track { flex: 1; height: 6px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; }
     .bar-fill {
-      height: 100%;
-      border-radius: 3px;
+      height: 100%; border-radius: 3px;
       transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       background: var(--accent);
     }
+    .bar-fill.approved  { background: var(--success); }
+    .bar-fill.pending   { background: #eab308; }
+    .bar-fill.rejected  { background: var(--danger); }
+    .bar-fill.active    { background: var(--accent-bright); }
+    .bar-fill.completed { background: var(--text-muted); }
+    .bar-value { font-size: 12px; color: var(--text-secondary); width: 30px; text-align: right; }
 
-    .bar-fill.approved { background: var(--success); }
-    .bar-fill.pending  { background: var(--warning); }
-    .bar-fill.rejected { background: var(--danger); }
+    /* Skeleton */
+    .skeleton-list { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+    .skeleton-row {
+      height: 36px;
+      background: linear-gradient(90deg, var(--bg-elevated) 25%, var(--bg-hover) 50%, var(--bg-elevated) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: var(--radius-md);
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-    .bar-value { font-size: 12px; color: var(--text-secondary); width: 36px; text-align: right; }
+    .empty-state {
+      padding: 32px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-family: var(--font-mono);
+    }
 
-    @media (max-width: 1200px) {
+    .text-warning { color: #eab308; }
+    .text-danger  { color: var(--danger); }
+
+    @media (max-width: 1400px) {
+      .stats-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 1100px) {
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .content-grid { grid-template-columns: 1fr; }
     }
   `],
 })
-export class AdminDashboardComponent {
-  readonly auth = inject(AuthService);
-  readonly Math = Math;
+export class AdminDashboardComponent implements OnInit {
+  private readonly http        = inject(HttpClient);
+  private readonly authService = inject(AuthService);
+
+  readonly loading           = signal(true);
+  readonly error             = signal('');
+  readonly customers         = signal<CustomerResponse[]>([]);
+  readonly loans             = signal<LoanResponse[]>([]);
+  readonly overduePayments   = signal<PaymentScheduleResponse[]>([]);
+  readonly upcomingPayments  = signal<PaymentScheduleResponse[]>([]);
+
+  // Computed stats
+  readonly activeLoans  = computed(() => this.loans().filter(l => l.status === 'ACTIVE').length);
+  readonly pendingLoans = computed(() => this.loans().filter(l => l.status === 'PENDING').length);
+  readonly totalCapital = computed(() =>
+    this.loans()
+      .filter(l => ['ACTIVE', 'APPROVED', 'DISBURSED'].includes(l.status))
+      .reduce((sum, l) => sum + (l.approvedAmount ?? l.amount), 0)
+  );
+
+  readonly loanStats = computed(() => {
+    const total = this.loans().length || 1;
+    const groups: Record<string, number> = {};
+    this.loans().forEach(l => {
+      groups[l.status] = (groups[l.status] || 0) + 1;
+    });
+    return Object.entries(groups).map(([status, count]) => ({
+      label: status,
+      count,
+      pct: Math.round((count / total) * 100),
+      type: status.toLowerCase(),
+    }));
+  });
 
   readonly navItems: NavItem[] = [
-    { icon: '◈', label: 'Dashboard',     route: '/dashboard/admin'  },
-    { icon: '◉', label: 'Usuarios',      route: '/dashboard/admin'  },
-    { icon: '◇', label: 'Préstamos',     route: '/loans'            },
-    { icon: '◎', label: 'Evaluaciones',  route: '/evaluations'      },
-    { icon: '○', label: 'Clientes',      route: '/dashboard/admin'  },
-    { icon: '◈', label: 'Pagos',         route: '/dashboard/admin'  },
-    { icon: '◦', label: 'Configuración', route: '/dashboard/admin'  },
-  ];
+  { icon: '◈', label: 'Dashboard',     route: '/dashboard/admin'  },
+  { icon: '○', label: 'Clientes',      route: '/admin/customers'  },
+  { icon: '◇', label: 'Préstamos',     route: '/admin/loans'      },
+  { icon: '◦', label: 'Configuración', route: '/dashboard/admin'  },
+];
 
-  readonly stats = [
-    { icon: '👤', label: 'Total usuarios',    value: '1,284',  trend: 12 },
-    { icon: '📋', label: 'Préstamos activos',  value: '347',    trend: 8  },
-    { icon: '💰', label: 'Capital expuesto',   value: 'S/2.1M', trend: -3 },
-    { icon: '⚠️', label: 'En mora',            value: '18',     trend: -22 },
-  ];
+  ngOnInit(): void {
+    const token   = this.authService.getToken();
+    const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+    const api     = environment.apiUrl;
 
-  readonly recentUsers = [
-    { id: 1, username: 'jperez',   email: 'juan@email.com',    role: 'CLIENTE',  active: true,  date: '26/02/2026' },
-    { id: 2, username: 'mrodriguez', email: 'maria@email.com', role: 'ANALISTA', active: true,  date: '25/02/2026' },
-    { id: 3, username: 'cgomez',   email: 'carlos@email.com',  role: 'CLIENTE',  active: false, date: '25/02/2026' },
-    { id: 4, username: 'lflores',  email: 'lucia@email.com',   role: 'ANALISTA', active: true,  date: '24/02/2026' },
-    { id: 5, username: 'rcastro',  email: 'roberto@email.com', role: 'CLIENTE',  active: true,  date: '24/02/2026' },
-  ];
-
-  readonly services = [
-    { name: 'auth-service',              route: 'lb://auth-service',              up: true,  ms: 45  },
-    { name: 'customer-service',          route: 'lb://customer-service',          up: true,  ms: 62  },
-    { name: 'loan-service',              route: 'lb://loan-service',              up: true,  ms: 88  },
-    { name: 'payment-service',           route: 'lb://payment-service',           up: true,  ms: 71  },
-    { name: 'credit-evaluation-service', route: 'lb://credit-evaluation-service', up: false, ms: 0   },
-    { name: 'notification-service',      route: 'lb://notification-service',      up: true,  ms: 120 },
-  ];
-
-  readonly loanData = [
-    { label: 'Aprobados',  pct: 68, count: 236, type: 'approved' },
-    { label: 'Pendientes', pct: 22, count: 76,  type: 'pending'  },
-    { label: 'Rechazados', pct: 10, count: 35,  type: 'rejected' },
-  ];
+    forkJoin({
+      customers:        this.http.get<CustomerResponse[]>(`${api}/api/customers`, { headers })
+                            .pipe(catchError(() => of([]))),
+      loans:            this.http.get<LoanResponse[]>(`${api}/api/loans`, { headers })
+                            .pipe(catchError(() => of([]))),
+      overdue:          this.http.get<PaymentScheduleResponse[]>(`${api}/api/payments/schedule/overdue`, { headers })
+                            .pipe(catchError(() => of([]))),
+      upcoming:         this.http.get<PaymentScheduleResponse[]>(`${api}/api/payments/schedule/upcoming?daysAhead=7`, { headers })
+                            .pipe(catchError(() => of([]))),
+    }).subscribe({
+      next: ({ customers, loans, overdue, upcoming }) => {
+        this.customers.set(customers as CustomerResponse[]);
+        this.loans.set(loans as LoanResponse[]);
+        this.overduePayments.set(overdue as PaymentScheduleResponse[]);
+        this.upcomingPayments.set(upcoming as PaymentScheduleResponse[]);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set('Error cargando datos. Verificá la conexión con los servicios.');
+        this.loading.set(false);
+      },
+    });
+  }
 }

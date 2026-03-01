@@ -73,6 +73,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                 user.getPassword() != null ? user.getPassword() : "",
                 user.getRoles().stream()
                         .map(role -> new SimpleGrantedAuthority(role.getName()))
+                        .distinct()
                         .toList(),
                 user.getId(),
                 user.getCustomerId(),
@@ -106,12 +107,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         Role clientRole = roleRepository.findByName("CLIENTE")
                 .orElseThrow(() -> new RuntimeException("Role CLIENTE not found en BD"));
-        boolean alreadyHasRole = user.getRoles().stream()
-                .anyMatch(r -> r.getName().equals("CLIENTE"));
-        if (!alreadyHasRole) {
-            user.getRoles().add(clientRole);
-        }
 
+        user.getRoles().add(clientRole);
         return userRepository.save(user);
     }
 }

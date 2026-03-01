@@ -54,6 +54,7 @@ public class GatewaySecurityConfig {
                         .pathMatchers("/actuator/**").permitAll()
 
                         // 2. CLIENTE — rutas específicas ANTES de las generales
+                        .pathMatchers(HttpMethod.PUT, "/api/auth/link-customer").authenticated()
                         .pathMatchers(HttpMethod.GET,  "/api/customers/me").hasRole("CLIENTE")
                         .pathMatchers(HttpMethod.PUT,  "/api/customers/me").hasRole("CLIENTE")
                         .pathMatchers(HttpMethod.GET,  "/api/customers/{id}")

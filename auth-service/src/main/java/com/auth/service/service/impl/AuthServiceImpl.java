@@ -50,9 +50,9 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        if (!user.getEmailVerified()) {
-            throw new RuntimeException("Email no verificado. Revisa tu bandeja de entrada.");
-        }
+        //if (!user.getEmailVerified()) {
+          //  throw new RuntimeException("Email no verificado. Revisa tu bandeja de entrada.");
+        //}
         if (!user.getEnabled()) {
             throw new RuntimeException("Cuenta deshabilitada");
         }
@@ -105,8 +105,8 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setCustomerId(customerId);          // ← se asigna directamente aquí
         user.setProvider(AuthProvider.LOCAL);
-        user.setEnabled(false);
-        user.setEmailVerified(false);
+        user.setEnabled(true);
+        user.setEmailVerified(true);
 
         Role clientRole = roleRepository.findByName("CLIENTE")
                 .orElseThrow(() -> new RuntimeException("Role no encontrado"));
@@ -114,10 +114,10 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         // ── 4. Enviar email de verificación ───────────────────────────
-        String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken = new VerificationToken(user, token);
-        tokenRepository.save(verificationToken);
-        emailService.sendVerificationEmail(user, token);
+        //String token = UUID.randomUUID().toString();
+        //VerificationToken verificationToken = new VerificationToken(user, token);
+        //tokenRepository.save(verificationToken);
+        //emailService.sendVerificationEmail(user, token);
 
         return "Registro exitoso. Revisa tu email para verificar tu cuenta.";
     }

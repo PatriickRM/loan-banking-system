@@ -23,7 +23,7 @@ export const roleGuard = (allowedRoles: UserRole[]): CanActivateFn => {
     }
 
     if (auth.hasAnyRole(...allowedRoles)) return true;
-
+    console.log('roleGuard bloqueando, roles del user:', auth.currentRoles(), 'allowedRoles:', allowedRoles);
     auth.redirectToDashboard();
     return false;
   };

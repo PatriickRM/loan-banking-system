@@ -93,6 +93,18 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/customer/customer-profile.component').then(m => m.CustomerProfileComponent),
   },
+  {
+    path: 'admin/customers',
+    canActivate: [authGuard, roleGuard(['ADMIN'])],
+    loadComponent: () =>
+      import('./features/dashboard/admin/admin-customers.component').then(m => m.AdminCustomersComponent),
+  },
+  {
+    path: 'admin/loans',
+    canActivate: [authGuard, roleGuard(['ADMIN'])],
+    loadComponent: () =>
+      import('./features/dashboard/admin/admin-loans.component').then(m => m.AdminLoansComponent),
+  },
 
   // Wildcard
   { path: '**', redirectTo: '/auth/login' },

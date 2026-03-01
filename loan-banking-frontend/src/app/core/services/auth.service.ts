@@ -82,7 +82,7 @@ export class AuthService {
     this.clearAuth();
     this.router.navigate(['/auth/login']);
   }
-  
+
   handleOAuthToken(token: string): void {
   try {
     const decoded = this.decodeToken(token);
@@ -137,6 +137,7 @@ export class AuthService {
   // ── Route redirect based on role ────────────────────────────────────────
   redirectToDashboard(): void {
     const roles = this.currentRoles();
+    console.log('redirectToDashboard called, roles:', roles);
     if (roles.includes('ADMIN')) {
       this.router.navigate(['/dashboard/admin']);
     } else if (roles.includes('ANALISTA')) {
@@ -146,6 +147,15 @@ export class AuthService {
     } else {
       this.router.navigate(['/auth/login']);
     }
+  }
+
+  updateCustomerId(customerId: number): void {
+    const current = this._user();
+    if (!current) return;
+    
+    const updated: AuthUser = { ...current, customerId };
+    this._user.set(updated);
+    localStorage.setItem('lbs_user', JSON.stringify(updated));
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────
